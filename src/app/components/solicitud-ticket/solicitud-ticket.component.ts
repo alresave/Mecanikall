@@ -15,7 +15,7 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
     <main class="min-h-dvh bg-slate-950 px-5 py-8 text-slate-50 sm:px-8">
       <section class="mx-auto w-full max-w-md">
         <header class="mb-8 flex items-center gap-3">
-          <div class="grid size-11 place-items-center rounded-lg border border-slate-700 shadow-lg shadow-black/20" style="background-color: #111827"><img src="logo.png" alt="Mecanikall" class="size-10 object-contain" /></div>
+          <div class="grid size-11 place-items-center overflow-hidden rounded-lg shadow-lg shadow-black/20"><img src="mecanikall.png" alt="Mecanikall" class="size-11 object-cover" /></div>
           <div><p class="text-lg font-bold tracking-tight">Mecanikall</p><p class="text-xs text-slate-400">Asistencia mecánica confiable</p></div>
         </header>
 
