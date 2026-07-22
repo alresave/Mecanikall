@@ -14,7 +14,12 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
-            "assets": [{ "glob": "logo.png", "input": ".", "output": "/" }],
+            "assets": [
+              { "glob": "logo.png", "input": ".", "output": "/" },
+              { "glob": "manifest.webmanifest", "input": ".", "output": "/" },
+              { "glob": "**/*", "input": "src/assets", "output": "/assets/" }
+            ],
+            "serviceWorker": "ngsw-config.json",
             "styles": ["src/styles.css"]
           },
           "configurations": {
