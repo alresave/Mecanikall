@@ -14,7 +14,7 @@ import { SupabaseService } from '../../services/supabase.service';
     <main class="min-h-dvh bg-slate-950 px-5 py-8 text-slate-50 sm:px-8">
       <section class="mx-auto w-full max-w-3xl">
         <header class="mb-8 flex items-center justify-between gap-4">
-          <div class="flex items-center gap-3"><div class="grid size-11 place-items-center rounded-xl bg-orange-500 text-xl text-slate-950">⚙</div><div><p class="text-lg font-bold tracking-tight">Mecanikall</p><p class="text-xs text-slate-400">Panel de talleres</p></div></div>
+          <div class="flex items-center gap-3"><div class="grid size-11 place-items-center rounded-xl bg-slate-900"><img src="logo.png" alt="Mecanikall" class="size-10 object-contain" /></div><div><p class="text-lg font-bold tracking-tight">Mecanikall</p><p class="text-xs text-slate-400">Panel de talleres</p></div></div>
           <div class="flex gap-4"><a routerLink="/" class="text-sm font-medium text-orange-400 hover:text-orange-300">Vista cliente</a><button type="button" class="text-sm font-medium text-slate-400 hover:text-slate-50" (click)="salir()">Salir</button></div>
         </header>
 
