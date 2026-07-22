@@ -2,9 +2,7 @@ import { Injectable } from '@angular/core';
 import { createClient, RealtimeChannel, SupabaseClient, User } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
 import {
-  Cliente,
   CrearClienteInput,
-  CrearTicketInput,
   Mecanico,
   Ticket,
   TicketConCliente,
@@ -20,45 +18,19 @@ export class SupabaseService {
     environment.supabaseAnonKey,
   );
 
-  /**
-   * Busca el cliente por WhatsApp y lo crea cuando aún no existe.
-   * Se normaliza el teléfono a diez dígitos antes de consultar.
-   */
-  async obtenerOCrearCliente(input: CrearClienteInput): Promise<number> {
-    const telefono = input.telefono_whatsapp.replace(/\D/g, '');
-    const { data: existente, error: errorBusqueda } = await this.client
-      .from('clientes')
-      .select('id_cliente')
-      .eq('telefono_whatsapp', telefono)
-      .maybeSingle<Pick<Cliente, 'id_cliente'>>();
-
-    if (errorBusqueda) throw errorBusqueda;
-    if (existente) return existente.id_cliente;
-
-    const { data: creado, error: errorCreacion } = await this.client
-      .from('clientes')
-      .insert({ nombre_completo: input.nombre_completo.trim(), telefono_whatsapp: telefono })
-      .select('id_cliente')
-      .single<Pick<Cliente, 'id_cliente'>>();
-
-    if (errorCreacion || !creado) {
-      throw errorCreacion ?? new Error('No fue posible crear el cliente.');
+  /** Crea una sesión anónima y registra la solicitud sin exponer datos de clientes. */
+  async solicitarAyuda(input: CrearClienteInput & { ubicacion_auto: string; descripcion_falla: string }): Promise<Ticket> {
+    const { data: sesion } = await this.client.auth.getSession();
+    if (!sesion.session) {
+      const { error } = await this.client.auth.signInAnonymously();
+      if (error) throw new Error('No pudimos iniciar una sesión segura. Intenta de nuevo.');
     }
-    return creado.id_cliente;
-  }
-
-  async crearTicket(input: CrearTicketInput): Promise<Ticket> {
-    const { data, error } = await this.client
-      .from('tickets')
-      .insert({
-        id_cliente: input.id_cliente,
-        descripcion_falla: input.descripcion_falla.trim(),
-        ubicacion_auto: input.ubicacion_auto.trim(),
-        estatus: TicketStatus.Abierto,
-      })
-      .select()
-      .single<Ticket>();
-
+    const { data, error } = await this.client.rpc('solicitar_ayuda', {
+      p_nombre: input.nombre_completo.trim(),
+      p_telefono: input.telefono_whatsapp.replace(/\D/g, ''),
+      p_ubicacion: input.ubicacion_auto.trim(),
+      p_descripcion: input.descripcion_falla.trim(),
+    }).single<Ticket>();
     if (error || !data) throw error ?? new Error('No fue posible crear la solicitud.');
     return data;
   }
@@ -106,24 +78,34 @@ export class SupabaseService {
   }
 
   async obtenerTicketsAbiertos(): Promise<TicketConCliente[]> {
-    const { data, error } = await this.client
-      .from('tickets')
-      .select('*, cliente:clientes!tickets_id_cliente_fkey(nombre_completo, telefono_whatsapp)')
-      .eq('estatus', TicketStatus.Abierto)
-      .order('created_at', { ascending: true });
+    const { data, error } = await this.client.rpc('tickets_abiertos_para_taller');
 
     if (error) throw error;
     return (data ?? []) as TicketConCliente[];
   }
 
-  async asignarTicket(idTicket: number, idMecanico: number): Promise<void> {
-    const { error } = await this.client
-      .from('tickets')
-      .update({ estatus: TicketStatus.Asignado, id_mecanico_asignado: idMecanico })
-      .eq('id_ticket', idTicket)
-      .eq('estatus', TicketStatus.Abierto);
+  async asignarTicket(idTicket: number): Promise<Ticket> {
+    const { data, error } = await this.client.rpc('aceptar_ticket', { p_id_ticket: idTicket }).single<Ticket>();
+    if (error || !data) throw error ?? new Error('La solicitud ya no está disponible.');
+    return data;
+  }
 
+  async obtenerMisTicketsAsignados(): Promise<TicketConCliente[]> {
+    const { data, error } = await this.client.rpc('tickets_asignados_del_taller');
     if (error) throw error;
+    return (data ?? []) as TicketConCliente[];
+  }
+
+  async concluirTicket(idTicket: number): Promise<Ticket> {
+    const { data, error } = await this.client.rpc('concluir_ticket', { p_id_ticket: idTicket }).single<Ticket>();
+    if (error || !data) throw error ?? new Error('No fue posible concluir el servicio.');
+    return data;
+  }
+
+  async cancelarTicket(idTicket: number): Promise<Ticket> {
+    const { data, error } = await this.client.rpc('cancelar_ticket', { p_id_ticket: idTicket }).single<Ticket>();
+    if (error || !data) throw error ?? new Error('No fue posible cancelar la solicitud.');
+    return data;
   }
 
   suscribirATicketsAbiertos(onChange: () => void): RealtimeChannel {

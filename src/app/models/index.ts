@@ -32,6 +32,7 @@ export interface Ticket {
   estatus: TicketStatus;
   id_mecanico_asignado: number | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface TicketConMecanico extends Ticket {

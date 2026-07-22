@@ -41,6 +41,13 @@ import { SupabaseService } from '../../services/supabase.service';
             </article>
           }
         </div> }
+
+        <div class="mt-10"><p class="text-xs font-bold tracking-[.2em] text-orange-400">SERVICIOS ASIGNADOS</p><h2 class="mt-2 text-xl font-bold">En atención</h2>
+          @if (!asignados().length) { <p class="mt-4 text-sm text-slate-400">No tienes servicios asignados.</p> }
+          @else { <div class="mt-4 grid gap-4 md:grid-cols-2">@for (ticket of asignados(); track ticket.id_ticket) {
+            <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.ubicacion_auto }}</p></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400">Asignado</span></div><p class="mt-4 text-sm leading-6 text-slate-300">{{ ticket.descripcion_falla }}</p><a class="mt-4 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a><button type="button" class="mt-4 w-full rounded-xl border border-emerald-400/50 px-4 py-3 font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" [disabled]="concluyendo() === ticket.id_ticket" (click)="concluir(ticket)">{{ concluyendo() === ticket.id_ticket ? 'Concluyendo…' : 'Marcar como concluido' }}</button></article>
+          }</div> }
+        </div>
       </section>
     </main>
   `,
@@ -53,8 +60,10 @@ export class PanelTallerComponent {
 
   readonly taller = signal<Mecanico | null>(null);
   readonly tickets = signal<TicketConCliente[]>([]);
+  readonly asignados = signal<TicketConCliente[]>([]);
   readonly cargando = signal(true);
   readonly aceptando = signal<number | null>(null);
+  readonly concluyendo = signal<number | null>(null);
   readonly error = signal<string | null>(null);
 
   constructor() {
@@ -64,18 +73,24 @@ export class PanelTallerComponent {
 
   async cargarTickets(): Promise<void> {
     this.cargando.set(true);
-    try { this.tickets.set(await this.supabase.obtenerTicketsAbiertos()); this.error.set(null); }
+    try { const [abiertos, asignados] = await Promise.all([this.supabase.obtenerTicketsAbiertos(), this.supabase.obtenerMisTicketsAsignados()]); this.tickets.set(abiertos); this.asignados.set(asignados); this.error.set(null); }
     catch { this.error.set('No pudimos cargar las solicitudes. Revisa tu conexión y permisos.'); }
     finally { this.cargando.set(false); }
   }
 
   async aceptar(ticket: TicketConCliente): Promise<void> {
-    const idMecanico = this.taller()?.id_mecanico;
-    if (!idMecanico) return;
+    if (!this.taller()) return;
     this.aceptando.set(ticket.id_ticket);
-    try { await this.supabase.asignarTicket(ticket.id_ticket, idMecanico); await this.cargarTickets(); }
+    try { await this.supabase.asignarTicket(ticket.id_ticket); await this.cargarTickets(); }
     catch { this.error.set('No fue posible aceptar el servicio. Puede que otro taller lo haya tomado.'); }
     finally { this.aceptando.set(null); }
+  }
+
+  async concluir(ticket: TicketConCliente): Promise<void> {
+    this.concluyendo.set(ticket.id_ticket);
+    try { await this.supabase.concluirTicket(ticket.id_ticket); await this.cargarTickets(); }
+    catch { this.error.set('No fue posible concluir el servicio.'); }
+    finally { this.concluyendo.set(null); }
   }
 
   whatsappCliente(ticket: TicketConCliente): string { return `https://wa.me/${ticket.cliente?.telefono_whatsapp.replace(/\\D/g, '') ?? ''}`; }

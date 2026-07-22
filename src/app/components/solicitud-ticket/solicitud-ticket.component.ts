@@ -51,7 +51,7 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
         } @else if (vista() === 'enviando') {
           <div class="py-24 text-center"><div class="mx-auto size-14 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500"></div><h1 class="mt-7 text-xl font-bold">Enviando tu solicitud</h1><p class="mt-2 text-sm text-slate-400">Estamos preparando la búsqueda.</p></div>
         } @else if (vista() === 'buscando') {
-          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Buscando mecánicos cerca de ti</h1><p class="mt-3 leading-6 text-slate-400">Tu reporte fue enviado. Te avisaremos en cuanto un taller lo acepte.</p><div class="mx-auto mt-8 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Conectado en tiempo real</div></div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Buscando mecánicos cerca de ti</h1><p class="mt-3 leading-6 text-slate-400">Tu reporte fue enviado. Te avisaremos en cuanto un taller lo acepte.</p><div class="mx-auto mt-8 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Conectado en tiempo real</div><button type="button" class="mt-6 text-sm font-medium text-slate-400 underline hover:text-red-300 disabled:opacity-50" [disabled]="cancelando()" (click)="cancelar()">{{ cancelando() ? 'Cancelando…' : 'Cancelar solicitud' }}</button></div>
         } @else {
           <div class="rounded-3xl border border-orange-400/30 bg-slate-800 p-7 text-center shadow-xl shadow-orange-950/20"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500 text-3xl text-slate-950">✓</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">AYUDA EN CAMINO</p><h1 class="mt-3 text-2xl font-bold">{{ mecanico()?.nombre_taller }}</h1><p class="mt-3 text-sm leading-6 text-slate-400">Aceptó tu solicitud. Escríbele para coordinar la atención.</p><a class="mt-7 block w-full rounded-xl bg-orange-500 px-4 py-3.5 font-bold text-slate-950 transition hover:bg-orange-400" [href]="whatsappUrl()" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>
         }
@@ -68,6 +68,8 @@ export class SolicitudTicketComponent {
   readonly vista = signal<VistaSolicitud>('formulario');
   readonly error = signal<string | null>(null);
   readonly mecanico = signal<Pick<Mecanico, 'nombre_taller' | 'whatsapp_destino'> | null>(null);
+  readonly idTicket = signal<number | null>(null);
+  readonly cancelando = signal(false);
   readonly formulario = this.fb.nonNullable.group({
     nombre_completo: ['', [Validators.required, Validators.minLength(2)]],
     telefono_whatsapp: ['', [Validators.required, Validators.pattern(/^\D*(?:\d\D*){10}$/)]],
@@ -87,8 +89,8 @@ export class SolicitudTicketComponent {
     this.error.set(null); this.vista.set('enviando');
     try {
       const valores = this.formulario.getRawValue();
-      const idCliente = await this.supabase.obtenerOCrearCliente(valores);
-      const ticket = await this.supabase.crearTicket({ id_cliente: idCliente, ubicacion_auto: valores.ubicacion_auto, descripcion_falla: valores.descripcion_falla });
+      const ticket = await this.supabase.solicitarAyuda(valores);
+      this.idTicket.set(ticket.id_ticket);
       this.vista.set('buscando');
       this.canal = this.supabase.suscribirATicket(ticket.id_ticket, (actualizado) => void this.procesarActualizacion(actualizado), () => this.error.set('Se perdió la conexión en tiempo real. Intenta recargar la página.'));
     } catch (err) {
@@ -100,6 +102,22 @@ export class SolicitudTicketComponent {
   whatsappUrl(): string {
     const telefono = this.mecanico()?.whatsapp_destino.replace(/\D/g, '') ?? '';
     return `https://wa.me/${telefono}?text=${encodeURIComponent('Hola, vi que aceptaste mi solicitud en Mecanikall.')}`;
+  }
+
+  async cancelar(): Promise<void> {
+    const idTicket = this.idTicket();
+    if (!idTicket) return;
+    this.cancelando.set(true);
+    try {
+      await this.supabase.cancelarTicket(idTicket);
+      await this.supabase.cancelarSuscripcion(this.canal);
+      this.canal = null;
+      this.idTicket.set(null);
+      this.formulario.reset();
+      this.vista.set('formulario');
+      this.error.set('La solicitud fue cancelada.');
+    } catch { this.error.set('No fue posible cancelar la solicitud; quizá ya fue aceptada.'); }
+    finally { this.cancelando.set(false); }
   }
 
   private async procesarActualizacion(ticket: Ticket): Promise<void> {

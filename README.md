@@ -46,6 +46,21 @@ export const environment = {
 
 No publiques una `service_role` key en el cliente. Usa exclusivamente la clave anónima y define políticas RLS acordes a tu flujo.
 
+### Activación para el MVP
+
+1. En **Authentication → Providers**, activa **Anonymous Sign-Ins**. Cada cliente
+   recibirá una sesión anónima para que solo pueda consultar su propia solicitud.
+2. Ejecuta `supabase/schema.sql` si es una base nueva. En una base existente,
+   ejecuta las migraciones en orden, incluida
+   `supabase/migrations/20260722170000_secure_mvp_flow.sql`.
+3. Crea el usuario del taller en **Authentication → Users** y crea su registro en
+   `mecanicos` con el mismo UUID en `id_usuario` y `estatus_suscripcion = 'Activo'`.
+4. Habilita Realtime para `public.tickets` en **Database → Replication**.
+
+La función de base de datos que registra solicitudes y las que listan/aceptan
+servicios son atómicas: los teléfonos no quedan disponibles mediante consultas
+públicas y un ticket solo puede ser aceptado una vez.
+
 Para recibir la asignación del taller sin recargar la página, habilita Realtime para `public.tickets` en Supabase (Database → Replication). También se recomienda una restricción `UNIQUE` para `clientes.telefono_whatsapp`, ya que ese campo se usa para localizar o crear al cliente.
 
 ## Comandos disponibles

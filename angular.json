@@ -37,5 +37,8 @@
         "test": { "builder": "@angular/build:karma", "options": { "tsConfig": "tsconfig.spec.json", "assets": [], "styles": ["src/styles.css"] } }
       }
     }
+  },
+  "cli": {
+    "analytics": "fd52056f-ee0c-4640-a225-cf4a3892e566"
   }
 }
