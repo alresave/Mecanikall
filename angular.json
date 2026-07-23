@@ -16,6 +16,8 @@
             "tsConfig": "tsconfig.app.json",
             "assets": [
               { "glob": "mecanikall.png", "input": ".", "output": "/" },
+              { "glob": "firebase-config.js", "input": ".", "output": "/" },
+              { "glob": "firebase-messaging-sw.js", "input": "src", "output": "/" },
               { "glob": "manifest.webmanifest", "input": ".", "output": "/" },
               { "glob": "**/*", "input": "src/assets", "output": "/assets/" }
             ],

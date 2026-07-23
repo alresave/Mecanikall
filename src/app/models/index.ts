@@ -22,6 +22,7 @@ export interface Mecanico {
   palabras_clave: string[];
   estatus_suscripcion: string;
   zona_cobertura: string;
+  radio_cobertura_metros: number;
 }
 
 /** Fila devuelta por la RPC `get_mecanicos_cercanos`. La distancia está en metros. */

@@ -1,0 +1,2 @@
+[functions.notify-nearby-mechanics]
+verify_jwt = false

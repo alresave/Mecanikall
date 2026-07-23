@@ -1,0 +1,12 @@
+// Copia este archivo como firebase-config.js en la raíz del proyecto.
+// No lo subas a Git: se publica como configuración web de Firebase, no contiene
+// credenciales de servidor. Toma los valores del bloque `firebase` de .env.local.
+self.FIREBASE_CONFIG = {
+  apiKey: 'REEMPLAZAR',
+  authDomain: 'REEMPLAZAR',
+  projectId: 'REEMPLAZAR',
+  storageBucket: 'REEMPLAZAR',
+  messagingSenderId: 'REEMPLAZAR',
+  appId: 'REEMPLAZAR',
+  vapidKey: 'REEMPLAZAR',
+};

@@ -84,6 +84,21 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  async actualizarRadioCoberturaMecanico(radioMetros: number): Promise<void> {
+    const { error } = await this.client.rpc('actualizar_radio_cobertura_mecanico', {
+      p_radio_metros: radioMetros,
+    });
+    if (error) throw error;
+  }
+
+  async registrarSuscripcionPush(tokenFcm: string, userAgent: string): Promise<void> {
+    const { error } = await this.client.rpc('registrar_suscripcion_push', {
+      p_token_fcm: tokenFcm,
+      p_user_agent: userAgent,
+    });
+    if (error) throw error;
+  }
+
   /** Recupera el taller asignado para obtener su nombre y teléfono de contacto. */
   async obtenerTicket(idTicket: number): Promise<TicketConMecanico> {
     const { data, error } = await this.client
@@ -117,7 +132,7 @@ export class SupabaseService {
     if (!usuario) return null;
     const { data, error } = await this.client
       .from('mecanicos')
-      .select('id_mecanico, id_usuario, nombre_taller, whatsapp_destino, especialidades, palabras_clave, estatus_suscripcion, zona_cobertura')
+      .select('id_mecanico, id_usuario, nombre_taller, whatsapp_destino, especialidades, palabras_clave, estatus_suscripcion, zona_cobertura, radio_cobertura_metros')
       .eq('id_usuario', usuario.id)
       .eq('estatus_suscripcion', 'Activo')
       .maybeSingle();
@@ -126,11 +141,9 @@ export class SupabaseService {
     return data as Mecanico | null;
   }
 
-  /** Devuelve tickets abiertos dentro del radio configurado desde el taller autenticado. */
-  async obtenerTicketsAbiertos(radioMetros = 5000): Promise<TicketConCliente[]> {
-    const { data, error } = await this.client.rpc('tickets_abiertos_para_taller', {
-      p_radio_metros: radioMetros,
-    });
+  /** Devuelve tickets abiertos dentro del radio configurado por el propio taller. */
+  async obtenerTicketsAbiertos(): Promise<TicketConCliente[]> {
+    const { data, error } = await this.client.rpc('tickets_abiertos_para_taller');
 
     if (error) throw error;
     return (data ?? []) as TicketConCliente[];

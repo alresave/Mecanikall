@@ -26,6 +26,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
           <p class="text-xs font-bold tracking-[.2em] text-orange-400">TALLER ACTIVO</p>
           <p class="mt-2 text-lg font-bold">{{ taller()?.nombre_taller ?? 'Cargando taller…' }}</p>
           <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="actualizandoUbicacion()" (click)="actualizarUbicacion()">{{ actualizandoUbicacion() ? 'Actualizando ubicación…' : 'Actualizar mi ubicación' }}</button></div>
+          <label class="mt-4 block text-sm text-slate-300">Radio de cobertura<select class="ml-3 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" [value]="taller()?.radio_cobertura_metros ?? 5000" [disabled]="actualizandoRadio()" (change)="actualizarRadioCobertura($any($event.target).value)"><option value="3000">3 km</option><option value="5000">5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select></label>
         </div>
 
         <div class="mt-8 flex items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUDES DISPONIBLES</p><h1 class="mt-2 text-2xl font-bold">Servicios cerca de ti</h1></div><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400" (click)="cargarTickets()">Actualizar</button></div>
@@ -68,6 +69,7 @@ export class PanelTallerComponent {
   readonly enviandoOferta = signal<number | null>(null);
   readonly concluyendo = signal<number | null>(null);
   readonly actualizandoUbicacion = signal(false);
+  readonly actualizandoRadio = signal(false);
   readonly error = signal<string | null>(null);
   readonly borradoresOferta = signal<Record<number, BorradorOferta>>({});
 
@@ -135,6 +137,22 @@ export class PanelTallerComponent {
       this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos actualizar la ubicación del taller.');
     } finally {
       this.actualizandoUbicacion.set(false);
+    }
+  }
+
+  async actualizarRadioCobertura(valor: string): Promise<void> {
+    const radioMetros = Number(valor);
+    if (![3000, 5000, 10000, 20000].includes(radioMetros)) return;
+    this.actualizandoRadio.set(true);
+    try {
+      await this.supabase.actualizarRadioCoberturaMecanico(radioMetros);
+      this.taller.update((taller) => taller ? { ...taller, radio_cobertura_metros: radioMetros } : taller);
+      await this.cargarTickets();
+      this.error.set(null);
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos actualizar el radio de cobertura.');
+    } finally {
+      this.actualizandoRadio.set(false);
     }
   }
 
