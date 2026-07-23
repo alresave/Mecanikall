@@ -148,6 +148,11 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  async crearAdministrador(email: string): Promise<void> {
+    const { error } = await this.client.functions.invoke('crear-administrador', { body: { email } });
+    if (error) throw error;
+  }
+
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();
     if (error) throw error;
