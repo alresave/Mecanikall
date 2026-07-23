@@ -1,15 +1,16 @@
+import { CurrencyPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { SupabaseService } from '../../services/supabase.service';
-import { Mecanico, Ticket, TicketConMecanico, TicketStatus } from '../../models';
+import { Mecanico, OfertaTicket, Ticket, TicketConMecanico, TicketStatus } from '../../models';
 
 type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
 
 @Component({
   selector: 'app-solicitud-ticket',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [CurrencyPipe, ReactiveFormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="min-h-dvh bg-slate-950 px-5 py-8 text-slate-50 sm:px-8">
@@ -51,7 +52,7 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
         } @else if (vista() === 'enviando') {
           <div class="py-24 text-center"><div class="mx-auto size-14 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500"></div><h1 class="mt-7 text-xl font-bold">Enviando tu solicitud</h1><p class="mt-2 text-sm text-slate-400">Estamos preparando la búsqueda.</p></div>
         } @else if (vista() === 'buscando') {
-          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Buscando mecánicos cerca de ti</h1><p class="mt-3 leading-6 text-slate-400">Tu reporte fue enviado. Te avisaremos en cuanto un taller lo acepte.</p><div class="mx-auto mt-8 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Conectado en tiempo real</div><button type="button" class="mt-6 text-sm font-medium text-slate-400 underline hover:text-red-300 disabled:opacity-50" [disabled]="cancelando()" (click)="cancelar()">{{ cancelando() ? 'Cancelando…' : 'Cancelar solicitud' }}</button></div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Compara las ofertas</h1><p class="mt-3 leading-6 text-slate-400">Los talleres cercanos enviarán precio y tiempo estimado.</p>@if (!ofertas().length) { <div class="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Esperando ofertas</div> } @else { <div class="mt-6 space-y-3 text-left">@for (oferta of ofertas(); track oferta.id_oferta) { <article class="rounded-xl border border-slate-600 bg-slate-900 p-4"><div class="flex justify-between gap-3"><div><p class="font-bold">{{ oferta.nombre_taller }}</p><p class="mt-1 text-xs text-slate-400">{{ oferta.especialidades.join(', ') || 'Servicio mecánico' }}</p></div><p class="font-bold text-orange-400">{{ oferta.precio_estimado | currency:'MXN':'symbol-narrow':'1.0-2' }}</p></div><p class="mt-3 text-sm text-slate-300">Llega aprox. en {{ oferta.tiempo_estimado_minutos }} min</p>@if (oferta.mensaje) { <p class="mt-2 text-sm text-slate-400">{{ oferta.mensaje }}</p> }<button type="button" class="mt-4 w-full rounded-lg bg-orange-500 px-3 py-2.5 font-bold text-slate-950 disabled:opacity-50" [disabled]="seleccionandoOferta() === oferta.id_oferta" (click)="aceptarOferta(oferta)">{{ seleccionandoOferta() === oferta.id_oferta ? 'Confirmando…' : 'Elegir esta oferta' }}</button></article> }</div> }<button type="button" class="mt-6 text-sm font-medium text-slate-400 underline hover:text-red-300 disabled:opacity-50" [disabled]="cancelando()" (click)="cancelar()">{{ cancelando() ? 'Cancelando…' : 'Cancelar solicitud' }}</button></div>
         } @else {
           <div class="rounded-3xl border border-orange-400/30 bg-slate-800 p-7 text-center shadow-xl shadow-orange-950/20"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500 text-3xl text-slate-950">✓</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">AYUDA EN CAMINO</p><h1 class="mt-3 text-2xl font-bold">{{ mecanico()?.nombre_taller }}</h1><p class="mt-3 text-sm leading-6 text-slate-400">Aceptó tu solicitud. Escríbele para coordinar la atención.</p><a class="mt-7 block w-full rounded-xl bg-orange-500 px-4 py-3.5 font-bold text-slate-950 transition hover:bg-orange-400" [href]="whatsappUrl()" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>
         }
@@ -64,12 +65,15 @@ export class SolicitudTicketComponent {
   private readonly supabase = inject(SupabaseService);
   private readonly destroyRef = inject(DestroyRef);
   private canal: RealtimeChannel | null = null;
+  private canalOfertas: RealtimeChannel | null = null;
 
   readonly vista = signal<VistaSolicitud>('formulario');
   readonly error = signal<string | null>(null);
   readonly mecanico = signal<Pick<Mecanico, 'nombre_taller' | 'whatsapp_destino'> | null>(null);
   readonly idTicket = signal<number | null>(null);
   readonly cancelando = signal(false);
+  readonly ofertas = signal<OfertaTicket[]>([]);
+  readonly seleccionandoOferta = signal<number | null>(null);
   readonly formulario = this.fb.nonNullable.group({
     nombre_completo: ['', [Validators.required, Validators.minLength(2)]],
     telefono_whatsapp: ['', [Validators.required, Validators.pattern(/^\D*(?:\d\D*){10}$/)]],
@@ -77,7 +81,7 @@ export class SolicitudTicketComponent {
     descripcion_falla: ['', [Validators.required, Validators.minLength(10)]],
   });
 
-  constructor() { this.destroyRef.onDestroy(() => void this.supabase.cancelarSuscripcion(this.canal)); }
+  constructor() { this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); }); }
 
   campoInvalido(nombre: keyof typeof this.formulario.controls): boolean {
     const control = this.formulario.controls[nombre];
@@ -89,10 +93,13 @@ export class SolicitudTicketComponent {
     this.error.set(null); this.vista.set('enviando');
     try {
       const valores = this.formulario.getRawValue();
-      const ticket = await this.supabase.solicitarAyuda(valores);
+      const coordenadas = await this.obtenerUbicacionActual();
+      const ticket = await this.supabase.solicitarAyuda({ ...valores, ...coordenadas });
       this.idTicket.set(ticket.id_ticket);
       this.vista.set('buscando');
       this.canal = this.supabase.suscribirATicket(ticket.id_ticket, (actualizado) => void this.procesarActualizacion(actualizado), () => this.error.set('Se perdió la conexión en tiempo real. Intenta recargar la página.'));
+      await this.cargarOfertas(ticket.id_ticket);
+      this.canalOfertas = this.supabase.suscribirAOfertas(ticket.id_ticket, () => void this.cargarOfertas(ticket.id_ticket));
     } catch (err) {
       this.vista.set('formulario');
       this.error.set(this.mensajeError(err));
@@ -111,8 +118,11 @@ export class SolicitudTicketComponent {
     try {
       await this.supabase.cancelarTicket(idTicket);
       await this.supabase.cancelarSuscripcion(this.canal);
+      await this.supabase.cancelarSuscripcion(this.canalOfertas);
       this.canal = null;
+      this.canalOfertas = null;
       this.idTicket.set(null);
+      this.ofertas.set([]);
       this.formulario.reset();
       this.vista.set('formulario');
       this.error.set('La solicitud fue cancelada.');
@@ -120,15 +130,45 @@ export class SolicitudTicketComponent {
     finally { this.cancelando.set(false); }
   }
 
+  async aceptarOferta(oferta: OfertaTicket): Promise<void> {
+    this.seleccionandoOferta.set(oferta.id_oferta);
+    try {
+      const ticket = await this.supabase.aceptarOferta(oferta.id_oferta);
+      await this.procesarActualizacion(ticket);
+    }
+    catch (error) { this.error.set(this.mensajeError(error)); await this.cargarOfertas(oferta.id_ticket); }
+    finally { this.seleccionandoOferta.set(null); }
+  }
+
   private async procesarActualizacion(ticket: Ticket): Promise<void> {
     if (ticket.estatus !== TicketStatus.Asignado && !ticket.id_mecanico_asignado) return;
     try {
       const detalle: TicketConMecanico = await this.supabase.obtenerTicket(ticket.id_ticket);
-      if (detalle.mecanico) { this.mecanico.set(detalle.mecanico); this.vista.set('asignado'); await this.supabase.cancelarSuscripcion(this.canal); this.canal = null; }
+      if (detalle.mecanico) { this.mecanico.set(detalle.mecanico); this.vista.set('asignado'); await this.supabase.cancelarSuscripcion(this.canal); await this.supabase.cancelarSuscripcion(this.canalOfertas); this.canal = null; this.canalOfertas = null; }
     } catch { this.error.set('El taller fue asignado, pero no pudimos cargar sus datos. Intenta recargar.'); }
   }
 
   private mensajeError(error: unknown): string {
     return error instanceof Error && error.message ? error.message : 'No pudimos enviar tu solicitud. Verifica tu conexión e inténtalo de nuevo.';
+  }
+
+  private async cargarOfertas(idTicket: number): Promise<void> {
+    try { this.ofertas.set(await this.supabase.obtenerOfertasParaCliente(idTicket)); }
+    catch { this.error.set('No pudimos actualizar las ofertas. Intenta recargar la página.'); }
+  }
+
+  /** Solicita la posición precisa del auto; el navegador exige HTTPS y consentimiento. */
+  private obtenerUbicacionActual(): Promise<{ latitud: number; longitud: number }> {
+    if (!navigator.geolocation) {
+      return Promise.reject(new Error('Tu navegador no permite obtener la ubicación.'));
+    }
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => resolve({ latitud: coords.latitude, longitud: coords.longitude }),
+        () => reject(new Error('Necesitamos tu ubicación para encontrar mecánicos cercanos. Activa el permiso e inténtalo de nuevo.')),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+      );
+    });
   }
 }

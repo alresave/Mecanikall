@@ -4,6 +4,8 @@ import { environment } from '../../environments/environment';
 import {
   CrearClienteInput,
   Mecanico,
+  MecanicoCercano,
+  OfertaTicket,
   Ticket,
   TicketConCliente,
   TicketConMecanico,
@@ -18,21 +20,68 @@ export class SupabaseService {
     environment.supabaseAnonKey,
   );
 
+  /** Conserva una sesión existente o crea la sesión anónima requerida por las RPC públicas. */
+  private async asegurarSesion(): Promise<void> {
+    const { data, error: sessionError } = await this.client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (data.session) return;
+
+    const { error } = await this.client.auth.signInAnonymously();
+    if (error) throw new Error('No pudimos iniciar una sesión segura. Intenta de nuevo.');
+  }
+
   /** Crea una sesión anónima y registra la solicitud sin exponer datos de clientes. */
-  async solicitarAyuda(input: CrearClienteInput & { ubicacion_auto: string; descripcion_falla: string }): Promise<Ticket> {
-    const { data: sesion } = await this.client.auth.getSession();
-    if (!sesion.session) {
-      const { error } = await this.client.auth.signInAnonymously();
-      if (error) throw new Error('No pudimos iniciar una sesión segura. Intenta de nuevo.');
-    }
+  async solicitarAyuda(input: CrearClienteInput & {
+    ubicacion_auto: string;
+    descripcion_falla: string;
+    latitud: number;
+    longitud: number;
+  }): Promise<Ticket> {
+    await this.asegurarSesion();
     const { data, error } = await this.client.rpc('solicitar_ayuda', {
       p_nombre: input.nombre_completo.trim(),
       p_telefono: input.telefono_whatsapp.replace(/\D/g, ''),
       p_ubicacion: input.ubicacion_auto.trim(),
       p_descripcion: input.descripcion_falla.trim(),
+      p_latitud: input.latitud,
+      p_longitud: input.longitud,
     }).single<Ticket>();
     if (error || !data) throw error ?? new Error('No fue posible crear la solicitud.');
     return data;
+  }
+
+  /**
+   * Encuentra talleres activos dentro del radio indicado, usando PostGIS en Supabase.
+   * La latitud y longitud deben provenir, por ejemplo, de `navigator.geolocation`.
+   */
+  async obtenerMecanicosCercanos(
+    latitud: number,
+    longitud: number,
+    radioMetros = 5000,
+  ): Promise<MecanicoCercano[]> {
+    await this.asegurarSesion();
+
+    const { data, error } = await this.client.rpc('get_mecanicos_cercanos', {
+      p_latitud: latitud,
+      p_longitud: longitud,
+      p_radio_metros: radioMetros,
+    });
+
+    if (error) throw error;
+    return (data ?? []) as MecanicoCercano[];
+  }
+
+  /**
+   * Guarda la ubicación actual del taller autenticado usando coordenadas WGS84.
+   * Debe invocarse tras obtener permiso del usuario con `navigator.geolocation`.
+   */
+  async actualizarUbicacionMecanico(latitud: number, longitud: number): Promise<void> {
+    const { error } = await this.client.rpc('actualizar_ubicacion_mecanico', {
+      p_latitud: latitud,
+      p_longitud: longitud,
+    });
+
+    if (error) throw error;
   }
 
   /** Recupera el taller asignado para obtener su nombre y teléfono de contacto. */
@@ -77,17 +126,40 @@ export class SupabaseService {
     return data as Mecanico | null;
   }
 
-  async obtenerTicketsAbiertos(): Promise<TicketConCliente[]> {
-    const { data, error } = await this.client.rpc('tickets_abiertos_para_taller');
+  /** Devuelve tickets abiertos dentro del radio configurado desde el taller autenticado. */
+  async obtenerTicketsAbiertos(radioMetros = 5000): Promise<TicketConCliente[]> {
+    const { data, error } = await this.client.rpc('tickets_abiertos_para_taller', {
+      p_radio_metros: radioMetros,
+    });
 
     if (error) throw error;
     return (data ?? []) as TicketConCliente[];
   }
 
-  async asignarTicket(idTicket: number): Promise<Ticket> {
-    const { data, error } = await this.client.rpc('aceptar_ticket', { p_id_ticket: idTicket }).single<Ticket>();
-    if (error || !data) throw error ?? new Error('La solicitud ya no está disponible.');
+  async enviarOferta(idTicket: number, precioEstimado: number, tiempoEstimadoMinutos: number, mensaje?: string): Promise<void> {
+    const { error } = await this.client.rpc('enviar_oferta', {
+      p_id_ticket: idTicket, p_precio_estimado: precioEstimado,
+      p_tiempo_estimado_minutos: tiempoEstimadoMinutos, p_mensaje: mensaje?.trim() || null,
+    });
+    if (error) throw error;
+  }
+
+  async obtenerOfertasParaCliente(idTicket: number): Promise<OfertaTicket[]> {
+    const { data, error } = await this.client.rpc('ofertas_para_cliente', { p_id_ticket: idTicket });
+    if (error) throw error;
+    return (data ?? []) as OfertaTicket[];
+  }
+
+  async aceptarOferta(idOferta: number): Promise<Ticket> {
+    const { data, error } = await this.client.rpc('aceptar_oferta', { p_id_oferta: idOferta }).single<Ticket>();
+    if (error || !data) throw error ?? new Error('La oferta ya no está disponible.');
     return data;
+  }
+
+  suscribirAOfertas(idTicket: number, onChange: () => void): RealtimeChannel {
+    return this.client.channel(`ofertas:${idTicket}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ofertas_ticket', filter: `id_ticket=eq.${idTicket}` }, onChange)
+      .subscribe();
   }
 
   async obtenerMisTicketsAsignados(): Promise<TicketConCliente[]> {

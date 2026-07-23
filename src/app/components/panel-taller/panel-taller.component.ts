@@ -5,6 +5,8 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { Mecanico, TicketConCliente } from '../../models';
 import { SupabaseService } from '../../services/supabase.service';
 
+interface BorradorOferta { precio: number | null; minutos: number | null; mensaje: string; }
+
 @Component({
   selector: 'app-panel-taller',
   standalone: true,
@@ -23,7 +25,7 @@ import { SupabaseService } from '../../services/supabase.service';
         <div class="rounded-2xl border border-slate-700 bg-slate-800 p-5">
           <p class="text-xs font-bold tracking-[.2em] text-orange-400">TALLER ACTIVO</p>
           <p class="mt-2 text-lg font-bold">{{ taller()?.nombre_taller ?? 'Cargando taller…' }}</p>
-          <p class="mt-1 text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p>
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="actualizandoUbicacion()" (click)="actualizarUbicacion()">{{ actualizandoUbicacion() ? 'Actualizando ubicación…' : 'Actualizar mi ubicación' }}</button></div>
         </div>
 
         <div class="mt-8 flex items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUDES DISPONIBLES</p><h1 class="mt-2 text-2xl font-bold">Servicios cerca de ti</h1></div><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400" (click)="cargarTickets()">Actualizar</button></div>
@@ -36,8 +38,9 @@ import { SupabaseService } from '../../services/supabase.service';
             <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5 shadow-lg shadow-black/20">
               <div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.created_at | date:'short' }}</p></div><span class="rounded-full bg-orange-500/15 px-3 py-1 text-xs font-bold text-orange-400">Abierto</span></div>
               <dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs font-bold tracking-wide text-slate-500">UBICACIÓN</dt><dd class="mt-1 text-slate-200">{{ ticket.ubicacion_auto }}</dd></div><div><dt class="text-xs font-bold tracking-wide text-slate-500">FALLA REPORTADA</dt><dd class="mt-1 leading-6 text-slate-300">{{ ticket.descripcion_falla }}</dd></div></dl>
-              <a class="mt-5 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a>
-              <button type="button" class="mt-5 w-full rounded-xl bg-orange-500 px-4 py-3 font-bold text-slate-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="aceptando() === ticket.id_ticket" (click)="aceptar(ticket)">{{ aceptando() === ticket.id_ticket ? 'Aceptando…' : 'Aceptar servicio' }}</button>
+              <div class="mt-5 grid grid-cols-2 gap-3"><label class="text-xs text-slate-400">Precio estimado (MXN)<input class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100" type="number" min="0" [value]="borradorOferta(ticket.id_ticket).precio ?? ''" (input)="actualizarBorrador(ticket.id_ticket, 'precio', $any($event.target).value)" /></label><label class="text-xs text-slate-400">Llegada (min)<input class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100" type="number" min="1" [value]="borradorOferta(ticket.id_ticket).minutos ?? ''" (input)="actualizarBorrador(ticket.id_ticket, 'minutos', $any($event.target).value)" /></label></div>
+              <label class="mt-3 block text-xs text-slate-400">Mensaje opcional<textarea class="mt-1 min-h-16 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100" maxlength="500" [value]="borradorOferta(ticket.id_ticket).mensaje" (input)="actualizarBorrador(ticket.id_ticket, 'mensaje', $any($event.target).value)"></textarea></label>
+              <button type="button" class="mt-4 w-full rounded-xl bg-orange-500 px-4 py-3 font-bold text-slate-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="enviandoOferta() === ticket.id_ticket" (click)="enviarOferta(ticket)">{{ enviandoOferta() === ticket.id_ticket ? 'Enviando oferta…' : 'Enviar oferta' }}</button>
             </article>
           }
         </div> }
@@ -62,9 +65,11 @@ export class PanelTallerComponent {
   readonly tickets = signal<TicketConCliente[]>([]);
   readonly asignados = signal<TicketConCliente[]>([]);
   readonly cargando = signal(true);
-  readonly aceptando = signal<number | null>(null);
+  readonly enviandoOferta = signal<number | null>(null);
   readonly concluyendo = signal<number | null>(null);
+  readonly actualizandoUbicacion = signal(false);
   readonly error = signal<string | null>(null);
+  readonly borradoresOferta = signal<Record<number, BorradorOferta>>({});
 
   constructor() {
     void this.inicializar();
@@ -78,12 +83,32 @@ export class PanelTallerComponent {
     finally { this.cargando.set(false); }
   }
 
-  async aceptar(ticket: TicketConCliente): Promise<void> {
-    if (!this.taller()) return;
-    this.aceptando.set(ticket.id_ticket);
-    try { await this.supabase.asignarTicket(ticket.id_ticket); await this.cargarTickets(); }
-    catch { this.error.set('No fue posible aceptar el servicio. Puede que otro taller lo haya tomado.'); }
-    finally { this.aceptando.set(null); }
+  borradorOferta(idTicket: number): BorradorOferta {
+    return this.borradoresOferta()[idTicket] ?? { precio: null, minutos: null, mensaje: '' };
+  }
+
+  actualizarBorrador(idTicket: number, campo: keyof BorradorOferta, valor: string): void {
+    const actual = this.borradorOferta(idTicket);
+    const numero = campo === 'mensaje' ? null : Number(valor);
+    this.borradoresOferta.update((borradores) => ({
+      ...borradores,
+      [idTicket]: { ...actual, [campo]: campo === 'mensaje' ? valor : (Number.isFinite(numero) && valor !== '' ? numero : null) },
+    }));
+  }
+
+  async enviarOferta(ticket: TicketConCliente): Promise<void> {
+    const oferta = this.borradorOferta(ticket.id_ticket);
+    if (oferta.precio === null || oferta.minutos === null || oferta.precio < 0 || oferta.minutos < 1) {
+      this.error.set('Indica un precio válido y el tiempo estimado de llegada.');
+      return;
+    }
+    this.enviandoOferta.set(ticket.id_ticket);
+    try {
+      await this.supabase.enviarOferta(ticket.id_ticket, oferta.precio, oferta.minutos, oferta.mensaje);
+      this.error.set(null);
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No fue posible enviar la oferta.');
+    } finally { this.enviandoOferta.set(null); }
   }
 
   async concluir(ticket: TicketConCliente): Promise<void> {
@@ -93,9 +118,39 @@ export class PanelTallerComponent {
     finally { this.concluyendo.set(null); }
   }
 
+  /** Actualiza el punto PostGIS del taller y recarga los servicios dentro de 5 km. */
+  async actualizarUbicacion(): Promise<void> {
+    if (!navigator.geolocation) {
+      this.error.set('Tu navegador no permite obtener la ubicación.');
+      return;
+    }
+
+    this.actualizandoUbicacion.set(true);
+    this.error.set(null);
+    try {
+      const coordenadas = await this.obtenerUbicacionActual();
+      await this.supabase.actualizarUbicacionMecanico(coordenadas.latitud, coordenadas.longitud);
+      await this.cargarTickets();
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos actualizar la ubicación del taller.');
+    } finally {
+      this.actualizandoUbicacion.set(false);
+    }
+  }
+
   whatsappCliente(ticket: TicketConCliente): string { return `https://wa.me/${ticket.cliente?.telefono_whatsapp.replace(/\\D/g, '') ?? ''}`; }
 
   async salir(): Promise<void> { await this.supabase.cerrarSesion(); await this.router.navigateByUrl('/acceso'); }
+
+  private obtenerUbicacionActual(): Promise<{ latitud: number; longitud: number }> {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => resolve({ latitud: coords.latitude, longitud: coords.longitude }),
+        () => reject(new Error('Necesitamos permiso de ubicación para mostrar servicios cercanos.')),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+      );
+    });
+  }
 
   private async inicializar(): Promise<void> {
     try { this.taller.set(await this.supabase.obtenerTallerActual()); await this.cargarTickets(); this.canal = this.supabase.suscribirATicketsAbiertos(() => void this.cargarTickets()); }

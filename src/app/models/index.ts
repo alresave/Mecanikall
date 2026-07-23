@@ -24,6 +24,29 @@ export interface Mecanico {
   zona_cobertura: string;
 }
 
+/** Fila devuelta por la RPC `get_mecanicos_cercanos`. La distancia está en metros. */
+export interface MecanicoCercano {
+  id_mecanico: number;
+  nombre_taller: string;
+  whatsapp_destino: string;
+  especialidades: string[];
+  zona_cobertura: string;
+  distancia_metros: number;
+}
+
+/** Oferta visible al solicitante antes de elegir un taller. Importes en MXN. */
+export interface OfertaTicket {
+  id_oferta: number;
+  id_ticket: number;
+  id_mecanico: number;
+  nombre_taller: string;
+  especialidades: string[];
+  precio_estimado: number;
+  tiempo_estimado_minutos: number;
+  mensaje: string | null;
+  created_at: string;
+}
+
 export interface Ticket {
   id_ticket: number;
   id_cliente: number;
