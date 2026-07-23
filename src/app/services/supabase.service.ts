@@ -138,7 +138,7 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  async crearMecanicoAdministrativo(input: { email: string; password: string; nombre_taller: string; whatsapp_destino: string; zona_cobertura: string; especialidades: string[] }): Promise<void> {
+  async crearMecanicoAdministrativo(input: { email: string; nombre_taller: string; whatsapp_destino: string; zona_cobertura: string; especialidades: string[] }): Promise<void> {
     const { error } = await this.client.functions.invoke('crear-mecanico', { body: input });
     if (error) throw error;
   }

@@ -14,9 +14,10 @@ Deno.serve(async (request) => {
   ]);
   if (!user || (!adminRole.data && !salesRole.data)) return new Response('No autorizado', { status: 403 });
   const input = await request.json();
-  if (!input.email || !input.password || !input.nombre_taller || !input.whatsapp_destino || !input.zona_cobertura) return new Response('Datos incompletos', { status: 400 });
-  const { data: created, error: createError } = await admin.auth.admin.createUser({ email: input.email.trim(), password: input.password, email_confirm: true });
-  if (createError || !created.user) return Response.json({ error: createError?.message ?? 'No fue posible crear el usuario' }, { status: 400 });
+  if (!input.email || !input.nombre_taller || !input.whatsapp_destino || !input.zona_cobertura) return new Response('Datos incompletos', { status: 400 });
+  const redirectTo = Deno.env.get('APP_URL') ? `${Deno.env.get('APP_URL')!.replace(/\/$/, '')}/acceso` : undefined;
+  const { data: created, error: createError } = await admin.auth.admin.inviteUserByEmail(input.email.trim(), redirectTo ? { redirectTo } : undefined);
+  if (createError || !created.user) return Response.json({ error: createError?.message ?? 'No fue posible enviar la invitación' }, { status: 400 });
   const { error: profileError } = await admin.from('mecanicos').insert({ id_usuario: created.user.id, nombre_taller: input.nombre_taller.trim(), whatsapp_destino: input.whatsapp_destino.replace(/\D/g, ''), zona_cobertura: input.zona_cobertura.trim(), especialidades: input.especialidades ?? [], palabras_clave: [], estatus_suscripcion: 'Pendiente' });
   if (profileError) { await admin.auth.admin.deleteUser(created.user.id); return Response.json({ error: profileError.message }, { status: 400 }); }
   return Response.json({ id_mecanico: created.user.id }, { status: 201 });
