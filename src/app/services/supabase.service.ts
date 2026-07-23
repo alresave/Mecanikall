@@ -127,6 +127,12 @@ export class SupabaseService {
     return Boolean(data);
   }
 
+  async obtenerRolBackoffice(): Promise<'admin' | 'ventas' | null> {
+    const { data, error } = await this.client.rpc('mi_rol_backoffice');
+    if (error) throw error;
+    return data === 'admin' || data === 'ventas' ? data : null;
+  }
+
   async activarAdministradorInicial(): Promise<void> {
     const { error } = await this.client.functions.invoke('bootstrap-admin');
     if (error) throw error;
@@ -134,6 +140,11 @@ export class SupabaseService {
 
   async crearMecanicoAdministrativo(input: { email: string; password: string; nombre_taller: string; whatsapp_destino: string; zona_cobertura: string; especialidades: string[] }): Promise<void> {
     const { error } = await this.client.functions.invoke('crear-mecanico', { body: input });
+    if (error) throw error;
+  }
+
+  async crearVendedor(email: string, password: string): Promise<void> {
+    const { error } = await this.client.functions.invoke('crear-vendedor', { body: { email, password } });
     if (error) throw error;
   }
 

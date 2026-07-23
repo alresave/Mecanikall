@@ -8,8 +8,11 @@ Deno.serve(async (request) => {
   const { data: { user } } = await caller.auth.getUser();
   const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}');
   const admin = createClient(url, keys.default ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const { data: role } = await admin.from('administradores').select('id_usuario').eq('id_usuario', user?.id ?? '').maybeSingle();
-  if (!user || !role) return new Response('No autorizado', { status: 403 });
+  const [adminRole, salesRole] = await Promise.all([
+    admin.from('administradores').select('id_usuario').eq('id_usuario', user?.id ?? '').maybeSingle(),
+    admin.from('vendedores').select('id_usuario').eq('id_usuario', user?.id ?? '').maybeSingle(),
+  ]);
+  if (!user || (!adminRole.data && !salesRole.data)) return new Response('No autorizado', { status: 403 });
   const input = await request.json();
   if (!input.email || !input.password || !input.nombre_taller || !input.whatsapp_destino || !input.zona_cobertura) return new Response('Datos incompletos', { status: 400 });
   const { data: created, error: createError } = await admin.auth.admin.createUser({ email: input.email.trim(), password: input.password, email_confirm: true });
