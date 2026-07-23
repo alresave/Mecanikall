@@ -143,8 +143,8 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  async crearVendedor(email: string, password: string): Promise<void> {
-    const { error } = await this.client.functions.invoke('crear-vendedor', { body: { email, password } });
+  async crearVendedor(email: string): Promise<void> {
+    const { error } = await this.client.functions.invoke('crear-vendedor', { body: { email } });
     if (error) throw error;
   }
 

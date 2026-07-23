@@ -10,9 +10,10 @@ Deno.serve(async (request) => {
   const { data: role } = await admin.from('administradores').select('id_usuario').eq('id_usuario', user?.id ?? '').maybeSingle();
   if (!user || !role) return new Response('No autorizado', { status: 403 });
   const input = await request.json();
-  if (!input.email || !input.password) return new Response('Datos incompletos', { status: 400 });
-  const { data, error } = await admin.auth.admin.createUser({ email: input.email.trim(), password: input.password, email_confirm: true });
-  if (error || !data.user) return Response.json({ error: error?.message ?? 'No fue posible crear el usuario' }, { status: 400 });
+  if (!input.email) return new Response('Correo requerido', { status: 400 });
+  const redirectTo = Deno.env.get('APP_URL') ? `${Deno.env.get('APP_URL')!.replace(/\/$/, '')}/acceso` : undefined;
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email.trim(), redirectTo ? { redirectTo } : undefined);
+  if (error || !data.user) return Response.json({ error: error?.message ?? 'No fue posible enviar la invitación' }, { status: 400 });
   const { error: insertError } = await admin.from('vendedores').insert({ id_usuario: data.user.id });
   if (insertError) { await admin.auth.admin.deleteUser(data.user.id); return Response.json({ error: insertError.message }, { status: 400 }); }
   return Response.json({ ok: true }, { status: 201 });
