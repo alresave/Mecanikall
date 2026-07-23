@@ -121,6 +121,22 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  async esAdministrador(): Promise<boolean> {
+    const { data, error } = await this.client.rpc('es_administrador');
+    if (error) throw error;
+    return Boolean(data);
+  }
+
+  async activarAdministradorInicial(): Promise<void> {
+    const { error } = await this.client.functions.invoke('bootstrap-admin');
+    if (error) throw error;
+  }
+
+  async crearMecanicoAdministrativo(input: { email: string; password: string; nombre_taller: string; whatsapp_destino: string; zona_cobertura: string; especialidades: string[] }): Promise<void> {
+    const { error } = await this.client.functions.invoke('crear-mecanico', { body: input });
+    if (error) throw error;
+  }
+
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();
     if (error) throw error;

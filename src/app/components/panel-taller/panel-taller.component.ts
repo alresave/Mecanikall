@@ -18,7 +18,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
       <section class="mx-auto w-full max-w-3xl">
         <header class="mb-8 flex items-center justify-between gap-4">
           <div class="flex items-center gap-3"><div class="grid size-11 place-items-center overflow-hidden rounded-lg"><img src="mecanikall.png" alt="Mecanikall" class="size-11 object-cover" /></div><div><p class="text-lg font-bold tracking-tight">Mecanikall</p><p class="text-xs text-slate-400">Panel de talleres</p></div></div>
-          <div class="flex gap-4"><a routerLink="/" class="text-sm font-medium text-orange-400 hover:text-orange-300">Vista cliente</a><button type="button" class="text-sm font-medium text-slate-400 hover:text-slate-50" (click)="salir()">Salir</button></div>
+          <div class="flex gap-4"><a routerLink="/" class="text-sm font-medium text-orange-400 hover:text-orange-300">Vista cliente</a><a routerLink="/admin" class="text-sm font-medium text-slate-400 hover:text-orange-300">Administración</a><button type="button" class="text-sm font-medium text-slate-400 hover:text-slate-50" (click)="salir()">Salir</button></div>
         </header>
 
         @if (error()) { <p role="alert" class="mb-5 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error() }}</p> }
