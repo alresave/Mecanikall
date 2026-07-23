@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { Router, RouterLink } from '@angular/router';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Mecanico, TicketConCliente } from '../../models';
+import { NotificationService } from '../../services/notification.service';
 import { SupabaseService } from '../../services/supabase.service';
 
 interface BorradorOferta { precio: number | null; minutos: number | null; mensaje: string; }
@@ -25,7 +26,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
         <div class="rounded-2xl border border-slate-700 bg-slate-800 p-5">
           <p class="text-xs font-bold tracking-[.2em] text-orange-400">TALLER ACTIVO</p>
           <p class="mt-2 text-lg font-bold">{{ taller()?.nombre_taller ?? 'Cargando taller…' }}</p>
-          <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="actualizandoUbicacion()" (click)="actualizarUbicacion()">{{ actualizandoUbicacion() ? 'Actualizando ubicación…' : 'Actualizar mi ubicación' }}</button></div>
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="activandoNotificaciones() || notificacionesActivas()" (click)="activarNotificaciones()">{{ notificacionesActivas() ? 'Notificaciones activas' : activandoNotificaciones() ? 'Activando…' : 'Activar notificaciones' }}</button><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="actualizandoUbicacion()" (click)="actualizarUbicacion()">{{ actualizandoUbicacion() ? 'Actualizando ubicación…' : 'Actualizar mi ubicación' }}</button></div></div>
           <label class="mt-4 block text-sm text-slate-300">Radio de cobertura<select class="ml-3 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" [value]="taller()?.radio_cobertura_metros ?? 5000" [disabled]="actualizandoRadio()" (change)="actualizarRadioCobertura($any($event.target).value)"><option value="3000">3 km</option><option value="5000">5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select></label>
         </div>
 
@@ -58,6 +59,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
 })
 export class PanelTallerComponent {
   private readonly supabase = inject(SupabaseService);
+  private readonly notifications = inject(NotificationService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private canal: RealtimeChannel | null = null;
@@ -70,6 +72,8 @@ export class PanelTallerComponent {
   readonly concluyendo = signal<number | null>(null);
   readonly actualizandoUbicacion = signal(false);
   readonly actualizandoRadio = signal(false);
+  readonly activandoNotificaciones = signal(false);
+  readonly notificacionesActivas = signal(false);
   readonly error = signal<string | null>(null);
   readonly borradoresOferta = signal<Record<number, BorradorOferta>>({});
 
@@ -153,6 +157,23 @@ export class PanelTallerComponent {
       this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos actualizar el radio de cobertura.');
     } finally {
       this.actualizandoRadio.set(false);
+    }
+  }
+
+  async activarNotificaciones(): Promise<void> {
+    this.activandoNotificaciones.set(true);
+    this.error.set(null);
+    try {
+      const token = await this.notifications.activarNotificaciones();
+      if (token) {
+        this.notificacionesActivas.set(true);
+      } else {
+        this.error.set('Las notificaciones no fueron autorizadas. Puedes habilitarlas desde la configuración del navegador.');
+      }
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos activar las notificaciones.');
+    } finally {
+      this.activandoNotificaciones.set(false);
     }
   }
 
