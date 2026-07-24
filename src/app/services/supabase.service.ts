@@ -153,6 +153,11 @@ export class SupabaseService {
     if (error) throw error;
   }
 
+  async invitarTiendaRefacciones(input: { email: string; nombre_tienda: string; whatsapp_destino: string; zona_cobertura: string; radio_cobertura_metros: number }): Promise<void> {
+    const { error } = await this.client.functions.invoke('crear-tienda-refacciones', { body: input });
+    if (error) throw error;
+  }
+
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();
     if (error) throw error;

@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Mecanico, TicketConCliente } from '../../models';
@@ -11,7 +12,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
 @Component({
   selector: 'app-panel-taller',
   standalone: true,
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="min-h-dvh bg-slate-950 px-5 py-8 text-slate-50 sm:px-8">
@@ -29,6 +30,8 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
           <div class="mt-1 flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-slate-400">{{ taller()?.zona_cobertura }}</p><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="activandoNotificaciones() || notificacionesActivas()" (click)="activarNotificaciones()">{{ notificacionesActivas() ? 'Notificaciones activas' : activandoNotificaciones() ? 'Activando…' : 'Activar notificaciones' }}</button><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-50" [disabled]="actualizandoUbicacion()" (click)="actualizarUbicacion()">{{ actualizandoUbicacion() ? 'Actualizando ubicación…' : 'Actualizar mi ubicación' }}</button></div></div>
           <label class="mt-4 block text-sm text-slate-300">Radio de cobertura<select class="ml-3 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" [value]="taller()?.radio_cobertura_metros ?? 5000" [disabled]="actualizandoRadio()" (change)="actualizarRadioCobertura($any($event.target).value)"><option value="3000">3 km</option><option value="5000">5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select></label>
         </div>
+
+        @if (taller()) { <form class="mt-5 space-y-3 rounded-2xl border border-cyan-400/40 bg-slate-800 p-5" [formGroup]="tiendaForm" (ngSubmit)="invitarTiendaRefacciones()"><p class="font-bold">Invitar tienda de refacciones</p><p class="text-sm text-slate-400">La tienda recibirá un correo para crear su contraseña. Quedará vinculada a tu taller.</p><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="nombre_tienda" placeholder="Nombre de la tienda" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="email" type="email" placeholder="Correo" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="whatsapp_destino" placeholder="WhatsApp" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="zona_cobertura" placeholder="Zona de cobertura" /><select class="w-full rounded-lg bg-slate-900 p-3" formControlName="radio_cobertura_metros"><option value="3000">3 km</option><option value="5000">5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select><button type="submit" class="w-full rounded-lg border border-cyan-400 p-3 font-bold text-cyan-200 disabled:opacity-50" [disabled]="tiendaForm.invalid || invitandoTienda()">{{ invitandoTienda() ? 'Enviando…' : 'Enviar invitación a la tienda' }}</button></form> }
 
         <div class="mt-8 flex items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUDES DISPONIBLES</p><h1 class="mt-2 text-2xl font-bold">Servicios cerca de ti</h1></div><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400" (click)="cargarTickets()">Actualizar</button></div>
 
@@ -60,6 +63,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
 export class PanelTallerComponent {
   private readonly supabase = inject(SupabaseService);
   private readonly notifications = inject(NotificationService);
+  private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private canal: RealtimeChannel | null = null;
@@ -74,8 +78,10 @@ export class PanelTallerComponent {
   readonly actualizandoRadio = signal(false);
   readonly activandoNotificaciones = signal(false);
   readonly notificacionesActivas = signal(false);
+  readonly invitandoTienda = signal(false);
   readonly error = signal<string | null>(null);
   readonly borradoresOferta = signal<Record<number, BorradorOferta>>({});
+  readonly tiendaForm = this.fb.nonNullable.group({ nombre_tienda: ['', Validators.required], email: ['', [Validators.required, Validators.email]], whatsapp_destino: ['', Validators.required], zona_cobertura: ['', Validators.required], radio_cobertura_metros: [5000, Validators.required] });
 
   constructor() {
     void this.inicializar();
@@ -174,6 +180,20 @@ export class PanelTallerComponent {
       this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos activar las notificaciones.');
     } finally {
       this.activandoNotificaciones.set(false);
+    }
+  }
+
+  async invitarTiendaRefacciones(): Promise<void> {
+    if (this.tiendaForm.invalid) return;
+    this.invitandoTienda.set(true);
+    this.error.set(null);
+    try {
+      await this.supabase.invitarTiendaRefacciones(this.tiendaForm.getRawValue());
+      this.tiendaForm.reset({ radio_cobertura_metros: 5000 });
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No fue posible enviar la invitación a la tienda.');
+    } finally {
+      this.invitandoTienda.set(false);
     }
   }
 
