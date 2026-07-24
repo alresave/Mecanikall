@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { Mecanico, TicketConCliente } from '../../models';
+import { HistorialRefaccionesTaller, Mecanico, OfertaRefaccionesTaller, TicketConCliente } from '../../models';
 import { NotificationService } from '../../services/notification.service';
 import { SupabaseService } from '../../services/supabase.service';
 
@@ -32,6 +32,10 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
         </div>
 
         @if (taller()) { <form class="mt-5 space-y-3 rounded-2xl border border-cyan-400/40 bg-slate-800 p-5" [formGroup]="tiendaForm" (ngSubmit)="invitarTiendaRefacciones()"><p class="font-bold">Invitar tienda de refacciones</p><p class="text-sm text-slate-400">La tienda recibirá un correo para crear su contraseña. Quedará vinculada a tu taller.</p><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="nombre_tienda" placeholder="Nombre de la tienda" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="email" type="email" placeholder="Correo" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="whatsapp_destino" placeholder="WhatsApp" /><input class="w-full rounded-lg bg-slate-900 p-3" formControlName="zona_cobertura" placeholder="Zona de cobertura" /><select class="w-full rounded-lg bg-slate-900 p-3" formControlName="radio_cobertura_metros"><option value="3000">3 km</option><option value="5000">5 km</option><option value="10000">10 km</option><option value="20000">20 km</option></select><button type="submit" class="w-full rounded-lg border border-cyan-400 p-3 font-bold text-cyan-200 disabled:opacity-50" [disabled]="tiendaForm.invalid || invitandoTienda()">{{ invitandoTienda() ? 'Enviando…' : 'Enviar invitación a la tienda' }}</button></form> }
+
+        @if (asignados().length) { <form class="mt-5 space-y-3 rounded-2xl border border-cyan-400/40 bg-slate-800 p-5" [formGroup]="refaccionForm" (ngSubmit)="solicitarRefacciones()"><p class="font-bold">Solicitar refacciones</p><select class="w-full rounded-lg bg-slate-900 p-3" formControlName="id_ticket">@for(ticket of asignados();track ticket.id_ticket){<option [value]="ticket.id_ticket">Ticket #{{ticket.id_ticket}} — {{ticket.descripcion_falla}}</option>}</select><textarea class="min-h-20 w-full rounded-lg bg-slate-900 p-3" formControlName="descripcion" placeholder="Refacciones requeridas, marca, modelo, número de parte…"></textarea><button class="w-full rounded-lg border border-cyan-400 p-3 font-bold text-cyan-200 disabled:opacity-50" [disabled]="refaccionForm.invalid || solicitandoRefacciones()">{{solicitandoRefacciones()?'Enviando…':'Solicitar cotizaciones'}}</button></form> }
+        @if (ofertasRefacciones().length) { <div class="mt-5 rounded-2xl border border-cyan-400/40 bg-slate-800 p-5"><p class="font-bold">Cotizaciones de refacciones</p>@for(oferta of ofertasRefacciones();track oferta.id_oferta){<div class="mt-4 rounded-lg bg-slate-900 p-4"><p class="font-bold">{{oferta.nombre_tienda}} · MXN {{oferta.precio_estimado}}</p><p class="mt-1 text-sm text-slate-400">{{oferta.descripcion}} · {{oferta.tiempo_estimado_minutos}} min</p>@if(oferta.mensaje){<p class="mt-1 text-sm text-slate-300">{{oferta.mensaje}}</p>}<button class="mt-3 rounded-lg border border-cyan-400 px-3 py-2 text-sm text-cyan-200" (click)="aceptarOfertaRefacciones(oferta.id_oferta)">Aceptar cotización</button></div>}</div> }
+        @if (historialRefacciones().length) { <div class="mt-5 rounded-2xl border border-slate-700 bg-slate-800 p-5"><p class="font-bold">Historial de refacciones</p>@for(solicitud of historialRefacciones();track solicitud.id_solicitud){<p class="mt-3 text-sm text-slate-300">Ticket #{{solicitud.id_ticket}} · {{solicitud.estatus}}@if(solicitud.nombre_tienda){ · {{solicitud.nombre_tienda}} }</p>}</div> }
 
         <div class="mt-8 flex items-end justify-between gap-4"><div><p class="text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUDES DISPONIBLES</p><h1 class="mt-2 text-2xl font-bold">Servicios cerca de ti</h1></div><button type="button" class="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300 hover:border-orange-400 hover:text-orange-400" (click)="cargarTickets()">Actualizar</button></div>
 
@@ -79,9 +83,13 @@ export class PanelTallerComponent {
   readonly activandoNotificaciones = signal(false);
   readonly notificacionesActivas = signal(false);
   readonly invitandoTienda = signal(false);
+  readonly solicitandoRefacciones = signal(false);
   readonly error = signal<string | null>(null);
   readonly borradoresOferta = signal<Record<number, BorradorOferta>>({});
   readonly tiendaForm = this.fb.nonNullable.group({ nombre_tienda: ['', Validators.required], email: ['', [Validators.required, Validators.email]], whatsapp_destino: ['', Validators.required], zona_cobertura: ['', Validators.required], radio_cobertura_metros: [5000, Validators.required] });
+  readonly refaccionForm = this.fb.nonNullable.group({ id_ticket: [0, Validators.min(1)], descripcion: ['', [Validators.required, Validators.minLength(3)]] });
+  readonly ofertasRefacciones = signal<OfertaRefaccionesTaller[]>([]);
+  readonly historialRefacciones = signal<HistorialRefaccionesTaller[]>([]);
 
   constructor() {
     void this.inicializar();
@@ -90,7 +98,7 @@ export class PanelTallerComponent {
 
   async cargarTickets(): Promise<void> {
     this.cargando.set(true);
-    try { const [abiertos, asignados] = await Promise.all([this.supabase.obtenerTicketsAbiertos(), this.supabase.obtenerMisTicketsAsignados()]); this.tickets.set(abiertos); this.asignados.set(asignados); this.error.set(null); }
+    try { const [abiertos, asignados, ofertas, historial] = await Promise.all([this.supabase.obtenerTicketsAbiertos(), this.supabase.obtenerMisTicketsAsignados(), this.supabase.obtenerOfertasRefaccionesParaTaller(), this.supabase.historialRefaccionesTaller()]); this.tickets.set(abiertos); this.asignados.set(asignados); this.ofertasRefacciones.set(ofertas); this.historialRefacciones.set(historial); this.error.set(null); }
     catch { this.error.set('No pudimos cargar las solicitudes. Revisa tu conexión y permisos.'); }
     finally { this.cargando.set(false); }
   }
@@ -197,6 +205,9 @@ export class PanelTallerComponent {
     }
   }
 
+  async solicitarRefacciones(): Promise<void> { if (this.refaccionForm.invalid) return; this.solicitandoRefacciones.set(true); try { const v=this.refaccionForm.getRawValue(); await this.supabase.crearSolicitudRefacciones(v.id_ticket, v.descripcion); this.refaccionForm.reset({id_ticket: 0, descripcion: ''}); this.error.set(null); } catch(error) { this.error.set(error instanceof Error ? error.message : 'No fue posible solicitar las refacciones.'); } finally { this.solicitandoRefacciones.set(false); } }
+  async aceptarOfertaRefacciones(idOferta: number): Promise<void> { try { await this.supabase.aceptarOfertaRefacciones(idOferta); await this.cargarTickets(); } catch { this.error.set('No fue posible aceptar la cotización.'); } }
+
   whatsappCliente(ticket: TicketConCliente): string { return `https://wa.me/${ticket.cliente?.telefono_whatsapp.replace(/\\D/g, '') ?? ''}`; }
 
   async salir(): Promise<void> { await this.supabase.cerrarSesion(); await this.router.navigateByUrl('/acceso'); }
@@ -212,7 +223,7 @@ export class PanelTallerComponent {
   }
 
   private async inicializar(): Promise<void> {
-    try { this.taller.set(await this.supabase.obtenerTallerActual()); await this.cargarTickets(); this.canal = this.supabase.suscribirATicketsAbiertos(() => void this.cargarTickets()); }
+    try { this.taller.set(await this.supabase.obtenerTallerActual()); await this.cargarTickets(); this.refaccionForm.patchValue({ id_ticket: this.asignados()[0]?.id_ticket ?? 0 }); this.canal = this.supabase.suscribirATicketsAbiertos(() => void this.cargarTickets()); }
     catch { this.cargando.set(false); this.error.set('No pudimos iniciar el panel. Revisa la configuración de Supabase.'); }
   }
 }

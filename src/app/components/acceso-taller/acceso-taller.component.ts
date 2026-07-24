@@ -30,7 +30,7 @@ export class AccesoTallerComponent {
   async ingresar(): Promise<void> {
     if (this.formulario.invalid) { this.formulario.markAllAsTouched(); return; }
     this.enviando.set(true); this.error.set(null);
-    try { await this.supabase.iniciarSesion(this.formulario.getRawValue().email, this.formulario.getRawValue().password); await this.router.navigateByUrl('/taller'); }
+    try { await this.supabase.iniciarSesion(this.formulario.getRawValue().email, this.formulario.getRawValue().password); await this.router.navigateByUrl((await this.supabase.esTiendaRefacciones()) ? '/refacciones' : '/taller'); }
     catch { this.error.set('No pudimos iniciar sesión. Verifica tus credenciales.'); }
     finally { this.enviando.set(false); }
   }

@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-interface WebhookPayload { record?: { id_notificacion?: number; id_ticket?: number }; }
-interface PushToken { token_fcm: string; id_mecanico: number; nombre_taller: string; }
+interface WebhookPayload { record?: { id_notificacion?: number }; }
+interface PushToken { token_fcm: string; titulo: string; mensaje: string; url_destino: string; }
 
 const scope = 'https://www.googleapis.com/auth/firebase.messaging';
 
@@ -38,8 +38,7 @@ Deno.serve(async (request) => {
 
   const payload = await request.json() as WebhookPayload;
   const idNotificacion = payload.record?.id_notificacion;
-  const idTicket = payload.record?.id_ticket;
-  if (!idNotificacion || !idTicket) return new Response('Payload inválido', { status: 400 });
+  if (!idNotificacion) return new Response('Payload inválido', { status: 400 });
 
   const secretKeys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}');
   const serviceKey = secretKeys.default ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -47,13 +46,13 @@ Deno.serve(async (request) => {
   await supabase.from('notificaciones_push').update({ estatus: 'Enviando', intentos: 1 }).eq('id_notificacion', idNotificacion);
 
   try {
-    const { data: tokens, error } = await supabase.rpc('tokens_push_para_ticket', { p_id_ticket: idTicket });
+    const { data: tokens, error } = await supabase.rpc('tokens_push_para_notificacion', { p_id_notificacion: idNotificacion });
     if (error) throw error;
     const serviceAccount = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON') ?? '');
     const token = await accessToken(serviceAccount);
     const url = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
-    const results = await Promise.all(((tokens ?? []) as PushToken[]).map(async ({ token_fcm }) => {
-      const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: { token: token_fcm, notification: { title: 'Nueva solicitud cerca de ti', body: 'Un automovilista necesita asistencia dentro de tu radio.' }, data: { url: '/taller', ticket_id: String(idTicket) } } }) });
+    const results = await Promise.all(((tokens ?? []) as PushToken[]).map(async ({ token_fcm, titulo, mensaje, url_destino }) => {
+      const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: { token: token_fcm, notification: { title: titulo, body: mensaje }, data: { url: url_destino } } }) });
       return response.ok;
     }));
     await supabase.from('notificaciones_push').update({ estatus: 'Enviado', enviados: results.filter(Boolean).length, processed_at: new Date().toISOString(), ultimo_error: null }).eq('id_notificacion', idNotificacion);

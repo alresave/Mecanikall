@@ -9,6 +9,11 @@ import {
   Ticket,
   TicketConCliente,
   TicketConMecanico,
+  SolicitudRefaccionesTienda,
+  OfertaRefaccionesTaller,
+  ProspectoSuscripcion,
+  EntidadOperativa,
+  HistorialRefaccionesTaller, HistorialRefaccionesTienda,
   TicketStatus,
 } from '../models';
 
@@ -157,6 +162,18 @@ export class SupabaseService {
     const { error } = await this.client.functions.invoke('crear-tienda-refacciones', { body: input });
     if (error) throw error;
   }
+
+  async crearSolicitudRefacciones(idTicket: number, descripcion: string): Promise<void> { const { error } = await this.client.rpc('crear_solicitud_refacciones', { p_id_ticket: idTicket, p_descripcion: descripcion }); if (error) throw error; }
+  async obtenerOfertasRefaccionesParaTaller(): Promise<OfertaRefaccionesTaller[]> { const { data, error } = await this.client.rpc('ofertas_refacciones_para_taller'); if (error) throw error; return (data ?? []) as OfertaRefaccionesTaller[]; }
+  async aceptarOfertaRefacciones(idOferta: number): Promise<void> { const { error } = await this.client.rpc('aceptar_oferta_refacciones', { p_id_oferta: idOferta }); if (error) throw error; }
+  async obtenerSolicitudesRefaccionesParaTienda(): Promise<SolicitudRefaccionesTienda[]> { const { data, error } = await this.client.rpc('solicitudes_refacciones_para_tienda'); if (error) throw error; return (data ?? []) as SolicitudRefaccionesTienda[]; }
+  async enviarOfertaRefacciones(idSolicitud: number, precio: number, minutos: number, mensaje: string): Promise<void> { const { error } = await this.client.rpc('enviar_oferta_refacciones', { p_id_solicitud: idSolicitud, p_precio_estimado: precio, p_tiempo_estimado_minutos: minutos, p_mensaje: mensaje }); if (error) throw error; }
+  async esTiendaRefacciones(): Promise<boolean> { const usuario = await this.obtenerUsuarioActual(); if (!usuario) return false; const { data, error } = await this.client.from('tiendas_refacciones').select('id_tienda').eq('id_usuario', usuario.id).maybeSingle(); if (error) throw error; return Boolean(data); }
+  async obtenerProspectosSuscripcion(mes: string): Promise<ProspectoSuscripcion[]> { const { data, error } = await this.client.rpc('prospectos_suscripcion_mensual', { p_mes: `${mes}-01` }); if (error) throw error; return (data ?? []) as ProspectoSuscripcion[]; }
+  async obtenerEntidadesOperativas(): Promise<EntidadOperativa[]> { const { data,error }=await this.client.rpc('entidades_operativas');if(error)throw error;return(data??[])as EntidadOperativa[]; }
+  async actualizarEstatusEntidad(tipo:'Taller'|'Tienda',id:number,estatus:'Activo'|'Suspendido'|'Pendiente'):Promise<void>{const{error}=await this.client.rpc('actualizar_estatus_entidad',{p_tipo:tipo,p_id_entidad:id,p_estatus:estatus});if(error)throw error;}
+  async historialRefaccionesTaller():Promise<HistorialRefaccionesTaller[]>{const{data,error}=await this.client.rpc('historial_refacciones_taller');if(error)throw error;return(data??[])as HistorialRefaccionesTaller[];}
+  async historialRefaccionesTienda():Promise<HistorialRefaccionesTienda[]>{const{data,error}=await this.client.rpc('historial_refacciones_tienda');if(error)throw error;return(data??[])as HistorialRefaccionesTienda[];}
 
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();
