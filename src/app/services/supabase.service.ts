@@ -177,6 +177,7 @@ export class SupabaseService {
   async historialRefaccionesTienda():Promise<HistorialRefaccionesTienda[]>{const{data,error}=await this.client.rpc('historial_refacciones_tienda');if(error)throw error;return(data??[])as HistorialRefaccionesTienda[];}
   async obtenerSeguimientosComerciales():Promise<SeguimientoComercial[]>{const{data,error}=await this.client.rpc('seguimientos_comerciales_actuales');if(error)throw error;return(data??[])as SeguimientoComercial[];}
   async guardarSeguimientoComercial(tipo:'Taller'|'Tienda de refacciones',id:number,estado:string,proximaAccion:string,notas:string,asignarme:boolean):Promise<void>{const{error}=await this.client.rpc('guardar_seguimiento_comercial',{p_tipo_entidad:tipo,p_id_entidad:id,p_estado:estado,p_proxima_accion:proximaAccion||null,p_notas:notas,p_asignarme:asignarme});if(error)throw error;}
+  async iniciarCheckoutSuscripcion():Promise<string>{const{data,error}=await this.client.functions.invoke<{url:string}>('stripe-checkout');if(error||!data?.url)throw error??new Error('No fue posible iniciar el pago.');return data.url;}
 
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();

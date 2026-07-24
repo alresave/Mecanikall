@@ -6,6 +6,7 @@ import { PanelAdminComponent } from './components/panel-admin/panel-admin.compon
 import { PanelRefaccionesComponent } from './components/panel-refacciones/panel-refacciones.component';
 import { ReporteSuscripcionesComponent } from './components/reporte-suscripciones/reporte-suscripciones.component';
 import { OperacionEntidadesComponent } from './components/operacion-entidades/operacion-entidades.component';
+import { SuscripcionComponent } from './components/suscripcion/suscripcion.component';
 import { tallerGuard } from './auth.guard';
 
 export const routes: Routes = [
@@ -16,5 +17,6 @@ export const routes: Routes = [
   { path: 'refacciones', component: PanelRefaccionesComponent, canActivate: [tallerGuard], title: 'Mecanikall | Refacciones' },
   { path: 'reportes', component: ReporteSuscripcionesComponent, canActivate: [tallerGuard], title: 'Mecanikall | Prospectos' },
   { path: 'operacion', component: OperacionEntidadesComponent, canActivate: [tallerGuard], title: 'Mecanikall | Operación' },
+  { path: 'suscripcion', component: SuscripcionComponent, canActivate: [tallerGuard], title: 'Mecanikall | Suscripción' },
   { path: '**', redirectTo: '' },
 ];
