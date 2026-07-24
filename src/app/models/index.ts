@@ -82,5 +82,6 @@ export interface SolicitudRefaccionesTienda { id_solicitud: number; id_ticket: n
 export interface OfertaRefaccionesTaller { id_oferta: number; id_solicitud: number; id_ticket: number; descripcion: string; nombre_tienda: string; precio_estimado: number; tiempo_estimado_minutos: number; mensaje: string | null; created_at: string; }
 export interface ProspectoSuscripcion { tipo: 'Taller' | 'Tienda de refacciones'; id_entidad: number; nombre: string; whatsapp: string; zona_cobertura: string; atenciones: number; }
 export interface EntidadOperativa { tipo: 'Taller' | 'Tienda'; id_entidad: number; nombre: string; whatsapp: string; zona: string; estatus: 'Activo' | 'Suspendido' | 'Pendiente'; created_at: string; atenciones_mes: number; }
+export interface SeguimientoComercial { tipo_entidad: 'Taller' | 'Tienda de refacciones'; id_entidad:number; estado:string; proxima_accion:string|null; notas:string; asignado_a_mi:boolean; }
 export interface HistorialRefaccionesTaller { id_solicitud:number;id_ticket:number;descripcion:string;estatus:string;nombre_tienda:string|null;accepted_at:string|null;created_at:string; }
 export interface HistorialRefaccionesTienda { id_oferta:number;id_solicitud:number;descripcion:string;estatus_oferta:string;estatus_solicitud:string;precio_estimado:number;tiempo_estimado_minutos:number;nombre_taller:string;created_at:string; }

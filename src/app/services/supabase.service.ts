@@ -13,6 +13,7 @@ import {
   OfertaRefaccionesTaller,
   ProspectoSuscripcion,
   EntidadOperativa,
+  SeguimientoComercial,
   HistorialRefaccionesTaller, HistorialRefaccionesTienda,
   TicketStatus,
 } from '../models';
@@ -174,6 +175,8 @@ export class SupabaseService {
   async actualizarEstatusEntidad(tipo:'Taller'|'Tienda',id:number,estatus:'Activo'|'Suspendido'|'Pendiente'):Promise<void>{const{error}=await this.client.rpc('actualizar_estatus_entidad',{p_tipo:tipo,p_id_entidad:id,p_estatus:estatus});if(error)throw error;}
   async historialRefaccionesTaller():Promise<HistorialRefaccionesTaller[]>{const{data,error}=await this.client.rpc('historial_refacciones_taller');if(error)throw error;return(data??[])as HistorialRefaccionesTaller[];}
   async historialRefaccionesTienda():Promise<HistorialRefaccionesTienda[]>{const{data,error}=await this.client.rpc('historial_refacciones_tienda');if(error)throw error;return(data??[])as HistorialRefaccionesTienda[];}
+  async obtenerSeguimientosComerciales():Promise<SeguimientoComercial[]>{const{data,error}=await this.client.rpc('seguimientos_comerciales_actuales');if(error)throw error;return(data??[])as SeguimientoComercial[];}
+  async guardarSeguimientoComercial(tipo:'Taller'|'Tienda de refacciones',id:number,estado:string,proximaAccion:string,notas:string,asignarme:boolean):Promise<void>{const{error}=await this.client.rpc('guardar_seguimiento_comercial',{p_tipo_entidad:tipo,p_id_entidad:id,p_estado:estado,p_proxima_accion:proximaAccion||null,p_notas:notas,p_asignarme:asignarme});if(error)throw error;}
 
   async obtenerUsuarioActual(): Promise<User | null> {
     const { data, error } = await this.client.auth.getUser();
