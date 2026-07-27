@@ -57,6 +57,15 @@ export interface Ticket {
   id_mecanico_asignado: number | null;
   created_at: string;
   updated_at?: string;
+  ai_prediagnostico?: DiagnosticoAi | null;
+  ai_urgencia?: DiagnosticoAi['urgency'] | null;
+}
+
+export interface DiagnosticoAi {
+  urgency: 'low' | 'medium' | 'high' | null;
+  possibleCauses: string[];
+  estimatedCostMxn: string | null;
+  nextStep: string | null;
 }
 
 export interface TicketConMecanico extends Ticket {

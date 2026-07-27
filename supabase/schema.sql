@@ -37,6 +37,10 @@ create table if not exists public.tickets (
   estatus public.tipo_estatus_ticket not null default 'Abierto',
   id_mecanico_asignado bigint references public.mecanicos(id_mecanico) on delete set null,
   id_usuario_solicitante uuid references auth.users(id) on delete set null,
+  canal_origen text not null default 'Web' check (canal_origen in ('Web', 'WhatsApp')),
+  ai_sesion_id text,
+  ai_prediagnostico jsonb,
+  ai_urgencia text check (ai_urgencia is null or ai_urgencia in ('low', 'medium', 'high')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ticket_asignacion_consistente check (
@@ -53,6 +57,7 @@ alter table public.tickets add column if not exists id_usuario_solicitante uuid 
 create index if not exists tickets_abiertos_idx on public.tickets (created_at asc) where estatus = 'Abierto';
 create index if not exists tickets_mecanico_idx on public.tickets (id_mecanico_asignado);
 create index if not exists tickets_solicitante_idx on public.tickets (id_usuario_solicitante);
+create unique index if not exists tickets_ai_sesion_unica_idx on public.tickets (ai_sesion_id) where ai_sesion_id is not null;
 create unique index if not exists clientes_telefono_whatsapp_unique_idx on public.clientes (telefono_whatsapp);
 create index if not exists mecanicos_usuario_idx on public.mecanicos (id_usuario);
 

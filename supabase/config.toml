@@ -1,5 +1,10 @@
+project_id = "rfmtfyrlidtpbugsjrwg"
+
 [functions.notify-nearby-mechanics]
 verify_jwt = false
 
 [functions.stripe-webhook]
+verify_jwt = false
+
+[functions.mecanikall-ai]
 verify_jwt = false

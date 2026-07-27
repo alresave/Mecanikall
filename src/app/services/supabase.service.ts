@@ -16,7 +16,14 @@ import {
   SeguimientoComercial,
   HistorialRefaccionesTaller, HistorialRefaccionesTienda, Vendedor, ComisionVendedor,
   TicketStatus,
+  DiagnosticoAi,
 } from '../models';
+
+interface RespuestaDiagnosticoAi {
+  reply: string;
+  readyForDiagnosis: boolean;
+  diagnostic: DiagnosticoAi;
+}
 
 /** Acceso centralizado a la API y a eventos en tiempo real de Supabase. */
 @Injectable({ providedIn: 'root' })
@@ -42,6 +49,7 @@ export class SupabaseService {
     descripcion_falla: string;
     latitud: number;
     longitud: number;
+    prediagnostico?: DiagnosticoAi | null;
   }): Promise<Ticket> {
     await this.asegurarSesion();
     const { data, error } = await this.client.rpc('solicitar_ayuda', {
@@ -51,8 +59,33 @@ export class SupabaseService {
       p_descripcion: input.descripcion_falla.trim(),
       p_latitud: input.latitud,
       p_longitud: input.longitud,
+      p_prediagnostico: input.prediagnostico ?? null,
+      p_urgencia: input.prediagnostico?.urgency ?? null,
     }).single<Ticket>();
     if (error || !data) throw error ?? new Error('No fue posible crear la solicitud.');
+    return data;
+  }
+
+  /** Genera un pre-diagnóstico con la sesión anónima actual, sin exponer secretos en el navegador. */
+  async generarPrediagnostico(detalle: {
+    vehiculo: string;
+    motorTransmision: string;
+    sintoma: string;
+    puedeCircular: 'yes' | 'no';
+    observaciones?: string;
+  }): Promise<RespuestaDiagnosticoAi> {
+    await this.asegurarSesion();
+    const mensaje = [
+      `Vehículo: ${detalle.vehiculo}.`,
+      `Motor/transmisión: ${detalle.motorTransmision || 'No lo conozco'}.`,
+      `Síntoma: ${detalle.sintoma}.`,
+      `¿Puede circular?: ${detalle.puedeCircular === 'yes' ? 'Sí' : 'No'}.`,
+      detalle.observaciones?.trim() ? `Observaciones adicionales: ${detalle.observaciones.trim()}.` : '',
+    ].filter(Boolean).join(' ');
+    const { data, error } = await this.client.functions.invoke<RespuestaDiagnosticoAi>('mecanikall-ai', {
+      body: { sessionId: crypto.randomUUID(), messages: [{ role: 'user', content: mensaje }] },
+    });
+    if (error || !data) throw error ?? new Error('No fue posible generar el pre-diagnóstico.');
     return data;
   }
 

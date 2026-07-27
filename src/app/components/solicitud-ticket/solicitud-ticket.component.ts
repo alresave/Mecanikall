@@ -46,7 +46,15 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
                 <textarea class="mt-2 min-h-28 w-full resize-none rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="descripcion_falla" placeholder="Ej. El coche desboca y rechina al frenar."></textarea>
                 @if (campoInvalido('descripcion_falla')) { <span class="mt-1 block text-xs text-red-300">Describe la falla para encontrar al especialista indicado.</span> }
               </label>
-              <button class="w-full rounded-xl bg-orange-500 px-4 py-3.5 font-bold text-slate-950 transition hover:bg-orange-400 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50" type="submit" [disabled]="formulario.invalid">Solicitar ayuda</button>
+              <label class="block text-sm font-medium">Vehículo
+                <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="vehiculo" placeholder="Ej. Nissan Versa 2018" />
+                @if (campoInvalido('vehiculo')) { <span class="mt-1 block text-xs text-red-300">Indica marca, modelo y año.</span> }
+              </label>
+              <label class="block text-sm font-medium">Motor o transmisión <span class="font-normal text-slate-400">(opcional)</span>
+                <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="motor_transmision" placeholder="Ej. 1.6 automático" />
+              </label>
+              <fieldset class="block text-sm font-medium"><legend>¿El auto puede circular con seguridad?</legend><div class="mt-2 grid grid-cols-2 gap-3"><label class="rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-center"><input class="mr-2" type="radio" formControlName="puede_circular" value="yes" />Sí</label><label class="rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-center"><input class="mr-2" type="radio" formControlName="puede_circular" value="no" />No</label></div>@if (campoInvalido('puede_circular')) { <span class="mt-1 block text-xs text-red-300">Selecciona una opción.</span> }</fieldset>
+              <button class="w-full rounded-xl bg-orange-500 px-4 py-3.5 font-bold text-slate-950 transition hover:bg-orange-400 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50" type="submit" [disabled]="formulario.invalid">Obtener diagnóstico y solicitar ayuda</button>
             </form>
           </div>
         } @else if (vista() === 'enviando') {
@@ -79,6 +87,9 @@ export class SolicitudTicketComponent {
     telefono_whatsapp: ['', [Validators.required, Validators.pattern(/^\D*(?:\d\D*){10}$/)]],
     ubicacion_auto: ['', [Validators.required, Validators.minLength(3)]],
     descripcion_falla: ['', [Validators.required, Validators.minLength(10)]],
+    vehiculo: ['', [Validators.required, Validators.minLength(5)]],
+    motor_transmision: [''],
+    puede_circular: ['', Validators.required],
   });
 
   constructor() { this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); }); }
@@ -94,7 +105,20 @@ export class SolicitudTicketComponent {
     try {
       const valores = this.formulario.getRawValue();
       const coordenadas = await this.obtenerUbicacionActual();
-      const ticket = await this.supabase.solicitarAyuda({ ...valores, ...coordenadas });
+      const diagnostico = await this.supabase.generarPrediagnostico({
+        vehiculo: valores.vehiculo,
+        motorTransmision: valores.motor_transmision,
+        sintoma: valores.descripcion_falla,
+        puedeCircular: valores.puede_circular as 'yes' | 'no',
+      });
+      const descripcionDetallada = [
+        `Vehículo: ${valores.vehiculo}.`,
+        valores.motor_transmision ? `Motor/transmisión: ${valores.motor_transmision}.` : '',
+        `Puede circular: ${valores.puede_circular === 'yes' ? 'Sí' : 'No'}.`,
+        `Falla reportada: ${valores.descripcion_falla}`,
+        diagnostico.readyForDiagnosis ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${diagnostico.reply}` : '',
+      ].filter(Boolean).join('\n');
+      const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico: diagnostico.diagnostic, ...coordenadas });
       this.idTicket.set(ticket.id_ticket);
       this.vista.set('buscando');
       this.canal = this.supabase.suscribirATicket(ticket.id_ticket, (actualizado) => void this.procesarActualizacion(actualizado), () => this.error.set('Se perdió la conexión en tiempo real. Intenta recargar la página.'));
