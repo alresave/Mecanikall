@@ -3,9 +3,33 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { SupabaseService } from '../../services/supabase.service';
-import { Mecanico, OfertaTicket, Ticket, TicketConMecanico, TicketStatus } from '../../models';
+import { DiagnosticoAi, Mecanico, OfertaTicket, Ticket, TicketConMecanico, TicketStatus } from '../../models';
 
 type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
+
+type MarcaVehiculo = { nombre: string; modelos: string[] };
+
+/** Catálogo inicial: los modelos más habituales en el parque vehicular mexicano. */
+const MARCAS_VEHICULOS: MarcaVehiculo[] = [
+  { nombre: 'Chevrolet', modelos: ['Aveo', 'Beat', 'Cavalier', 'Equinox', 'Malibu', 'Onix', 'Spark', 'Tahoe', 'Tracker'] },
+  { nombre: 'Dodge', modelos: ['Attitude', 'Challenger', 'Charger', 'Durango', 'Journey'] },
+  { nombre: 'Ford', modelos: ['Bronco', 'Edge', 'Escape', 'Explorer', 'F-150', 'Focus', 'Fusion', 'Lobo', 'Maverick', 'Mustang', 'Ranger'] },
+  { nombre: 'GMC', modelos: ['Acadia', 'Sierra', 'Terrain', 'Yukon'] },
+  { nombre: 'Honda', modelos: ['BR-V', 'City', 'Civic', 'CR-V', 'HR-V', 'Odyssey', 'Pilot'] },
+  { nombre: 'Hyundai', modelos: ['Accent', 'Creta', 'Elantra', 'Grand i10', 'Santa Fe', 'Tucson'] },
+  { nombre: 'Jeep', modelos: ['Cherokee', 'Compass', 'Gladiator', 'Grand Cherokee', 'Renegade', 'Wrangler'] },
+  { nombre: 'Kia', modelos: ['Forte', 'K3', 'K4', 'Niro', 'Rio', 'Seltos', 'Sonet', 'Soul', 'Sportage'] },
+  { nombre: 'Mazda', modelos: ['CX-3', 'CX-30', 'CX-5', 'CX-50', 'CX-9', 'Mazda2', 'Mazda3', 'MX-5'] },
+  { nombre: 'Mercedes-Benz', modelos: ['Clase A', 'Clase C', 'Clase E', 'GLA', 'GLC', 'GLE', 'Sprinter'] },
+  { nombre: 'Mitsubishi', modelos: ['Eclipse Cross', 'L200', 'Mirage', 'Montero Sport', 'Outlander', 'Xpander'] },
+  { nombre: 'Nissan', modelos: ['Altima', 'Frontier', 'Kicks', 'March', 'NP300', 'Pathfinder', 'Sentra', 'Versa', 'X-Trail'] },
+  { nombre: 'Renault', modelos: ['Duster', 'Kangoo', 'Koleos', 'Kwid', 'Logan', 'Oroch', 'Stepway'] },
+  { nombre: 'SEAT', modelos: ['Arona', 'Ateca', 'Ibiza', 'León', 'Tarraco', 'Toledo'] },
+  { nombre: 'Suzuki', modelos: ['Baleno', 'Ertiga', 'Fronx', 'Ignis', 'Jimny', 'Swift', 'S-Cross', 'Vitara'] },
+  { nombre: 'Tesla', modelos: ['Model 3', 'Model S', 'Model X', 'Model Y'] },
+  { nombre: 'Toyota', modelos: ['Avanza', 'Camry', 'Corolla', 'Hilux', 'Highlander', 'RAV4', 'Sienna', 'Tacoma', 'Yaris'] },
+  { nombre: 'Volkswagen', modelos: ['Golf', 'Jetta', 'Nivus', 'Polo', 'Saveiro', 'Taos', 'T-Cross', 'Tiguan', 'Vento', 'Virtus'] },
+];
 
 @Component({
   selector: 'app-solicitud-ticket',
@@ -22,6 +46,9 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
 
         @if (error()) {
           <div role="alert" class="mb-5 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error() }}</div>
+        }
+        @if (aviso()) {
+          <div role="status" class="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{{ aviso() }}</div>
         }
 
         @if (vista() === 'formulario') {
@@ -46,10 +73,22 @@ type VistaSolicitud = 'formulario' | 'enviando' | 'buscando' | 'asignado';
                 <textarea class="mt-2 min-h-28 w-full resize-none rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="descripcion_falla" placeholder="Ej. El coche desboca y rechina al frenar."></textarea>
                 @if (campoInvalido('descripcion_falla')) { <span class="mt-1 block text-xs text-red-300">Describe la falla para encontrar al especialista indicado.</span> }
               </label>
-              <label class="block text-sm font-medium">Vehículo
-                <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="vehiculo" placeholder="Ej. Nissan Versa 2018" />
-                @if (campoInvalido('vehiculo')) { <span class="mt-1 block text-xs text-red-300">Indica marca, modelo y año.</span> }
-              </label>
+              <fieldset class="space-y-3"><legend class="text-sm font-medium">Vehículo</legend>
+                <label class="block text-sm text-slate-300">Marca
+                  <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="marca" (change)="alCambiarMarca()"><option value="">Selecciona una marca</option>@for (marca of marcas; track marca.nombre) { <option [value]="marca.nombre">{{ marca.nombre }}</option> }<option value="__otra__">Otra / no aparece en la lista</option></select>
+                  @if (campoInvalido('marca')) { <span class="mt-1 block text-xs text-red-300">Selecciona una marca.</span> }
+                </label>
+                @if (formulario.controls.marca.value === '__otra__') { <label class="block text-sm text-slate-300">Escribe la marca<input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="marca_otro" placeholder="Ej. BYD" />@if (campoInvalido('marca_otro')) { <span class="mt-1 block text-xs text-red-300">Indica la marca.</span> }</label> }
+                <label class="block text-sm text-slate-300">Modelo
+                  <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 disabled:cursor-not-allowed disabled:opacity-50" formControlName="modelo" (change)="alCambiarModelo()"><option value="">{{ formulario.controls.marca.value ? 'Selecciona un modelo' : 'Primero selecciona una marca' }}</option>@for (modelo of modelosDisponibles; track modelo) { <option [value]="modelo">{{ modelo }}</option> }<option value="__otro__">Otro modelo</option></select>
+                  @if (campoInvalido('modelo')) { <span class="mt-1 block text-xs text-red-300">Selecciona un modelo.</span> }
+                </label>
+                @if (formulario.controls.modelo.value === '__otro__') { <label class="block text-sm text-slate-300">Escribe el modelo<input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="modelo_otro" placeholder="Ej. Dolphin Mini" />@if (campoInvalido('modelo_otro')) { <span class="mt-1 block text-xs text-red-300">Indica el modelo.</span> }</label> }
+                <label class="block text-sm text-slate-300">Año
+                  <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="anio"><option value="">Selecciona el año</option>@for (anio of anios; track anio) { <option [value]="anio">{{ anio }}</option> }</select>
+                  @if (campoInvalido('anio')) { <span class="mt-1 block text-xs text-red-300">Selecciona el año del vehículo.</span> }
+                </label>
+              </fieldset>
               <label class="block text-sm font-medium">Motor o transmisión <span class="font-normal text-slate-400">(opcional)</span>
                 <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="motor_transmision" placeholder="Ej. 1.6 automático" />
               </label>
@@ -77,17 +116,24 @@ export class SolicitudTicketComponent {
 
   readonly vista = signal<VistaSolicitud>('formulario');
   readonly error = signal<string | null>(null);
+  readonly aviso = signal<string | null>(null);
   readonly mecanico = signal<Pick<Mecanico, 'nombre_taller' | 'whatsapp_destino'> | null>(null);
   readonly idTicket = signal<number | null>(null);
   readonly cancelando = signal(false);
   readonly ofertas = signal<OfertaTicket[]>([]);
   readonly seleccionandoOferta = signal<number | null>(null);
+  readonly marcas = MARCAS_VEHICULOS;
+  readonly anios = Array.from({ length: 50 }, (_, indice) => String(new Date().getFullYear() - indice));
   readonly formulario = this.fb.nonNullable.group({
     nombre_completo: ['', [Validators.required, Validators.minLength(2)]],
     telefono_whatsapp: ['', [Validators.required, Validators.pattern(/^\D*(?:\d\D*){10}$/)]],
     ubicacion_auto: ['', [Validators.required, Validators.minLength(3)]],
     descripcion_falla: ['', [Validators.required, Validators.minLength(10)]],
-    vehiculo: ['', [Validators.required, Validators.minLength(5)]],
+    marca: ['', Validators.required],
+    marca_otro: [{ value: '', disabled: true }, [Validators.required, Validators.minLength(2)]],
+    modelo: [{ value: '', disabled: true }, Validators.required],
+    modelo_otro: [{ value: '', disabled: true }, [Validators.required, Validators.minLength(1)]],
+    anio: ['', Validators.required],
     motor_transmision: [''],
     puede_circular: ['', Validators.required],
   });
@@ -99,26 +145,59 @@ export class SolicitudTicketComponent {
     return control.invalid && (control.touched || control.dirty);
   }
 
+  get modelosDisponibles(): string[] {
+    return this.marcas.find((marca) => marca.nombre === this.formulario.controls.marca.value)?.modelos ?? [];
+  }
+
+  alCambiarMarca(): void {
+    const otraMarca = this.formulario.controls.marca.value === '__otra__';
+    this.formulario.controls.modelo.reset();
+    this.formulario.controls.modelo_otro.reset();
+    this.formulario.controls.modelo.enable();
+    otraMarca ? this.formulario.controls.marca_otro.enable() : this.formulario.controls.marca_otro.disable();
+    if (!otraMarca) this.formulario.controls.marca_otro.reset();
+    this.formulario.controls.modelo_otro.disable();
+  }
+
+  alCambiarModelo(): void {
+    const otroModelo = this.formulario.controls.modelo.value === '__otro__';
+    otroModelo ? this.formulario.controls.modelo_otro.enable() : this.formulario.controls.modelo_otro.disable();
+    if (!otroModelo) this.formulario.controls.modelo_otro.reset();
+  }
+
   async enviar(): Promise<void> {
     if (this.formulario.invalid) { this.formulario.markAllAsTouched(); return; }
-    this.error.set(null); this.vista.set('enviando');
+    this.error.set(null); this.aviso.set(null); this.vista.set('enviando');
     try {
       const valores = this.formulario.getRawValue();
+      const marca = valores.marca === '__otra__' ? valores.marca_otro.trim() : valores.marca;
+      const modelo = valores.modelo === '__otro__' ? valores.modelo_otro.trim() : valores.modelo;
+      const vehiculo = `${marca} ${modelo} ${valores.anio}`;
       const coordenadas = await this.obtenerUbicacionActual();
-      const diagnostico = await this.supabase.generarPrediagnostico({
-        vehiculo: valores.vehiculo,
-        motorTransmision: valores.motor_transmision,
-        sintoma: valores.descripcion_falla,
-        puedeCircular: valores.puede_circular as 'yes' | 'no',
-      });
+      let prediagnostico: DiagnosticoAi | null = null;
+      let diagnosticoListo = false;
+      let textoDiagnostico: string | null = null;
+      try {
+        const respuestaIa = await this.supabase.generarPrediagnostico({
+          vehiculo,
+          motorTransmision: valores.motor_transmision,
+          sintoma: valores.descripcion_falla,
+          puedeCircular: valores.puede_circular as 'yes' | 'no',
+        });
+        prediagnostico = respuestaIa.diagnostic;
+        diagnosticoListo = respuestaIa.readyForDiagnosis;
+        textoDiagnostico = respuestaIa.reply;
+      } catch {
+        this.aviso.set('No pudimos generar el pre-diagnóstico, pero tu solicitud fue enviada a los talleres cercanos.');
+      }
       const descripcionDetallada = [
-        `Vehículo: ${valores.vehiculo}.`,
+        `Vehículo: ${vehiculo}.`,
         valores.motor_transmision ? `Motor/transmisión: ${valores.motor_transmision}.` : '',
         `Puede circular: ${valores.puede_circular === 'yes' ? 'Sí' : 'No'}.`,
         `Falla reportada: ${valores.descripcion_falla}`,
-        diagnostico.readyForDiagnosis ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${diagnostico.reply}` : '',
+        diagnosticoListo && textoDiagnostico ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${textoDiagnostico}` : '',
       ].filter(Boolean).join('\n');
-      const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico: diagnostico.diagnostic, ...coordenadas });
+      const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico, ...coordenadas });
       this.idTicket.set(ticket.id_ticket);
       this.vista.set('buscando');
       this.canal = this.supabase.suscribirATicket(ticket.id_ticket, (actualizado) => void this.procesarActualizacion(actualizado), () => this.error.set('Se perdió la conexión en tiempo real. Intenta recargar la página.'));
