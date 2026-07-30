@@ -15,7 +15,7 @@ import {
   EntidadOperativa,
   SeguimientoComercial,
   HistorialRefaccionesTaller, HistorialRefaccionesTienda, Vendedor, ComisionVendedor,
-  TicketStatus,
+  TicketStatus, EvidenciaTicket,
   DiagnosticoAi,
 } from '../models';
 
@@ -262,6 +262,40 @@ export class SupabaseService {
     const { data, error } = await this.client.rpc('aceptar_oferta', { p_id_oferta: idOferta }).single<Ticket>();
     if (error || !data) throw error ?? new Error('La oferta ya no está disponible.');
     return data;
+  }
+
+  /** Sube fotos o audios a un bucket privado; solo el solicitante y su taller asignado podrán consultarlos. */
+  async subirEvidenciaTicket(idTicket: number, archivos: File[]): Promise<void> {
+    if (!archivos.length) return;
+    const usuario = await this.obtenerUsuarioActual();
+    if (!usuario) throw new Error('No pudimos validar tu sesión para subir las fotos.');
+    const rutas: string[] = [];
+    try {
+      for (const archivo of archivos) {
+        const extension = archivo.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const ruta = `${usuario.id}/${idTicket}/${crypto.randomUUID()}.${extension}`;
+        const { error } = await this.client.storage.from('ticket-evidencia').upload(ruta, archivo, { contentType: archivo.type, upsert: false });
+        if (error) throw error;
+        rutas.push(ruta);
+      }
+      const { error } = await this.client.from('ticket_adjuntos').insert(rutas.map((storage_path, index) => ({ id_ticket: idTicket, storage_path, media_type: archivos[index].type })));
+      if (error) throw error;
+    } catch (error) {
+      if (rutas.length) await this.client.storage.from('ticket-evidencia').remove(rutas);
+      throw error;
+    }
+  }
+
+  async obtenerEvidenciaTickets(idsTicket: number[]): Promise<EvidenciaTicket[]> {
+    if (!idsTicket.length) return [];
+    const { data, error } = await this.client.from('ticket_adjuntos').select('id_adjunto, id_ticket, storage_path, media_type').in('id_ticket', idsTicket);
+    if (error) throw error;
+    const fotos = await Promise.all((data ?? []).map(async (adjunto) => {
+      const { data: firma, error: firmaError } = await this.client.storage.from('ticket-evidencia').createSignedUrl(adjunto.storage_path, 3600);
+      if (firmaError || !firma?.signedUrl) throw firmaError ?? new Error('No fue posible abrir la evidencia del ticket.');
+      return { id_adjunto: adjunto.id_adjunto, id_ticket: adjunto.id_ticket, media_type: adjunto.media_type, url: firma.signedUrl };
+    }));
+    return fotos;
   }
 
   suscribirAOfertas(idTicket: number, onChange: () => void): RealtimeChannel {

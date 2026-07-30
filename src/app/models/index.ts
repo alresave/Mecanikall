@@ -76,6 +76,13 @@ export interface TicketConCliente extends Ticket {
   cliente?: Pick<Cliente, 'nombre_completo' | 'telefono_whatsapp'> | null;
 }
 
+export interface EvidenciaTicket {
+  id_adjunto: number;
+  id_ticket: number;
+  media_type: string;
+  url: string;
+}
+
 export interface CrearClienteInput {
   nombre_completo: string;
   telefono_whatsapp: string;

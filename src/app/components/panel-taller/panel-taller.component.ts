@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { HistorialRefaccionesTaller, Mecanico, OfertaRefaccionesTaller, TicketConCliente } from '../../models';
+import { EvidenciaTicket, HistorialRefaccionesTaller, Mecanico, OfertaRefaccionesTaller, TicketConCliente } from '../../models';
 import { NotificationService } from '../../services/notification.service';
 import { SupabaseService } from '../../services/supabase.service';
 
@@ -57,7 +57,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
         <div class="mt-10"><p class="text-xs font-bold tracking-[.2em] text-orange-400">SERVICIOS ASIGNADOS</p><h2 class="mt-2 text-xl font-bold">En atención</h2>
           @if (!asignados().length) { <p class="mt-4 text-sm text-slate-400">No tienes servicios asignados.</p> }
           @else { <div class="mt-4 grid gap-4 md:grid-cols-2">@for (ticket of asignados(); track ticket.id_ticket) {
-            <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.ubicacion_auto }}</p></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400">Asignado</span></div><p class="mt-4 text-sm leading-6 text-slate-300">{{ ticket.descripcion_falla }}</p><a class="mt-4 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a><button type="button" class="mt-4 w-full rounded-xl border border-emerald-400/50 px-4 py-3 font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" [disabled]="concluyendo() === ticket.id_ticket" (click)="concluir(ticket)">{{ concluyendo() === ticket.id_ticket ? 'Concluyendo…' : 'Marcar como concluido' }}</button></article>
+            <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.ubicacion_auto }}</p></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400">Asignado</span></div><p class="mt-4 text-sm leading-6 text-slate-300">{{ ticket.descripcion_falla }}</p>@if (evidenciaTicket(ticket.id_ticket).length) { <div class="mt-4 grid grid-cols-2 gap-2">@for (archivo of evidenciaTicket(ticket.id_ticket); track archivo.id_adjunto) { @if (archivo.media_type.startsWith('image/')) { <a [href]="archivo.url" target="_blank" rel="noopener noreferrer"><img class="h-24 w-full rounded object-cover" [src]="archivo.url" alt="Foto adjunta del vehículo" /></a> } @else { <audio class="w-full" controls [src]="archivo.url"></audio> } }</div> }<a class="mt-4 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a><button type="button" class="mt-4 w-full rounded-xl border border-emerald-400/50 px-4 py-3 font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" [disabled]="concluyendo() === ticket.id_ticket" (click)="concluir(ticket)">{{ concluyendo() === ticket.id_ticket ? 'Concluyendo…' : 'Marcar como concluido' }}</button></article>
           }</div> }
         </div>
       </section>
@@ -90,6 +90,7 @@ export class PanelTallerComponent {
   readonly refaccionForm = this.fb.nonNullable.group({ id_ticket: [0, Validators.min(1)], descripcion: ['', [Validators.required, Validators.minLength(3)]] });
   readonly ofertasRefacciones = signal<OfertaRefaccionesTaller[]>([]);
   readonly historialRefacciones = signal<HistorialRefaccionesTaller[]>([]);
+  readonly evidenciaPorTicket = signal<Record<number, EvidenciaTicket[]>>({});
 
   constructor() {
     void this.inicializar();
@@ -98,7 +99,7 @@ export class PanelTallerComponent {
 
   async cargarTickets(): Promise<void> {
     this.cargando.set(true);
-    try { const [abiertos, asignados, ofertas, historial] = await Promise.all([this.supabase.obtenerTicketsAbiertos(), this.supabase.obtenerMisTicketsAsignados(), this.supabase.obtenerOfertasRefaccionesParaTaller(), this.supabase.historialRefaccionesTaller()]); this.tickets.set(abiertos); this.asignados.set(asignados); this.ofertasRefacciones.set(ofertas); this.historialRefacciones.set(historial); this.error.set(null); }
+    try { const [abiertos, asignados, ofertas, historial] = await Promise.all([this.supabase.obtenerTicketsAbiertos(), this.supabase.obtenerMisTicketsAsignados(), this.supabase.obtenerOfertasRefaccionesParaTaller(), this.supabase.historialRefaccionesTaller()]); const evidencia = await this.supabase.obtenerEvidenciaTickets([...abiertos, ...asignados].map((ticket) => ticket.id_ticket)); this.tickets.set(abiertos); this.asignados.set(asignados); this.ofertasRefacciones.set(ofertas); this.historialRefacciones.set(historial); this.evidenciaPorTicket.set(evidencia.reduce<Record<number, EvidenciaTicket[]>>((porTicket, archivo) => ({ ...porTicket, [archivo.id_ticket]: [...(porTicket[archivo.id_ticket] ?? []), archivo] }), {})); this.error.set(null); }
     catch { this.error.set('No pudimos cargar las solicitudes. Revisa tu conexión y permisos.'); }
     finally { this.cargando.set(false); }
   }
@@ -209,6 +210,7 @@ export class PanelTallerComponent {
   async aceptarOfertaRefacciones(idOferta: number): Promise<void> { try { await this.supabase.aceptarOfertaRefacciones(idOferta); await this.cargarTickets(); } catch { this.error.set('No fue posible aceptar la cotización.'); } }
 
   whatsappCliente(ticket: TicketConCliente): string { return `https://wa.me/${ticket.cliente?.telefono_whatsapp.replace(/\\D/g, '') ?? ''}`; }
+  evidenciaTicket(idTicket: number): EvidenciaTicket[] { return this.evidenciaPorTicket()[idTicket] ?? []; }
 
   async salir(): Promise<void> { await this.supabase.cerrarSesion(); await this.router.navigateByUrl('/acceso'); }
 

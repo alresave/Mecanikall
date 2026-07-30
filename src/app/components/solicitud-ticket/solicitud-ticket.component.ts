@@ -91,6 +91,11 @@ const MARCAS_VEHICULOS: MarcaVehiculo[] = [
                   <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="antecedentes_falla" placeholder="Ej. Pasé un bache, se hizo un servicio o empezó después de cargar gasolina." />
                 </label>
               </fieldset>
+              <fieldset class="space-y-3 rounded-xl border border-slate-700 bg-slate-900/40 p-4"><legend class="px-1 text-sm font-semibold text-orange-300">Fotos o audio <span class="font-normal text-slate-400">(opcional)</span></legend>
+                <p class="text-xs leading-5 text-slate-400">Adjunta hasta 3 archivos. Una foto del tablero o un audio del ruido puede ayudar mucho al taller. Máximo: fotos 8 MB, audio 20 MB.</p>
+                <input class="block w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-3 file:py-2 file:font-semibold file:text-slate-950" type="file" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/wav,audio/mp4" multiple (change)="seleccionarEvidencia($event)" />
+                @if (evidencia().length) { <div class="grid gap-3 sm:grid-cols-2">@for (archivo of evidencia(); track archivo.url) { <div class="rounded-lg border border-slate-700 bg-slate-950 p-3"><p class="truncate text-xs font-medium text-slate-200">{{ archivo.nombre }}</p>@if (archivo.esImagen) { <img class="mt-2 h-28 w-full rounded object-cover" [src]="archivo.url" [alt]="archivo.nombre" /> } @else { <audio class="mt-2 w-full" controls [src]="archivo.url"></audio> }</div> }</div> }
+              </fieldset>
               <fieldset class="space-y-3"><legend class="text-sm font-medium">Vehículo</legend>
                 <label class="block text-sm text-slate-300">Marca
                   <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="marca" (change)="alCambiarMarca()"><option value="">Selecciona una marca</option>@for (marca of marcas; track marca.nombre) { <option [value]="marca.nombre">{{ marca.nombre }}</option> }<option value="__otra__">Otra / no aparece en la lista</option></select>
@@ -140,6 +145,7 @@ export class SolicitudTicketComponent {
   readonly cancelando = signal(false);
   readonly ofertas = signal<OfertaTicket[]>([]);
   readonly seleccionandoOferta = signal<number | null>(null);
+  readonly evidencia = signal<{ archivo: File; nombre: string; url: string; esImagen: boolean }[]>([]);
   readonly marcas = MARCAS_VEHICULOS;
   readonly anios = Array.from({ length: 50 }, (_, indice) => String(new Date().getFullYear() - indice));
   readonly formulario = this.fb.nonNullable.group({
@@ -160,7 +166,7 @@ export class SolicitudTicketComponent {
     puede_circular: ['', Validators.required],
   });
 
-  constructor() { this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); }); }
+  constructor() { this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); this.limpiarEvidencia(); }); }
 
   campoInvalido(nombre: keyof typeof this.formulario.controls): boolean {
     const control = this.formulario.controls[nombre];
@@ -185,6 +191,18 @@ export class SolicitudTicketComponent {
     const otroModelo = this.formulario.controls.modelo.value === '__otro__';
     otroModelo ? this.formulario.controls.modelo_otro.enable() : this.formulario.controls.modelo_otro.disable();
     if (!otroModelo) this.formulario.controls.modelo_otro.reset();
+  }
+
+  seleccionarEvidencia(evento: Event): void {
+    const nuevos = Array.from((evento.target as HTMLInputElement).files ?? []);
+    const permitidos = new Set(['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/wav', 'audio/mp4']);
+    const actuales = this.evidencia();
+    if (actuales.length + nuevos.length > 3) { this.error.set('Puedes adjuntar hasta 3 fotos o audios.'); return; }
+    const invalidos = nuevos.find((archivo) => !permitidos.has(archivo.type) || archivo.size > (archivo.type.startsWith('audio/') ? 20 : 8) * 1024 * 1024);
+    if (invalidos) { this.error.set('Usa JPG, PNG, WebP, MP3, WAV o M4A. Las fotos permiten hasta 8 MB y los audios hasta 20 MB.'); return; }
+    this.error.set(null);
+    this.evidencia.set([...actuales, ...nuevos.map((archivo) => ({ archivo, nombre: archivo.name, url: URL.createObjectURL(archivo), esImagen: archivo.type.startsWith('image/') }))]);
+    (evento.target as HTMLInputElement).value = '';
   }
 
   async enviar(): Promise<void> {
@@ -231,6 +249,11 @@ export class SolicitudTicketComponent {
         diagnosticoListo && textoDiagnostico ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${textoDiagnostico}` : '',
       ].filter(Boolean).join('\n');
       const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico, ...coordenadas });
+      if (this.evidencia().length) {
+        try { await this.supabase.subirEvidenciaTicket(ticket.id_ticket, this.evidencia().map(({ archivo }) => archivo)); }
+        catch { this.aviso.set('La solicitud fue enviada, pero no pudimos adjuntar algunos archivos.'); }
+        finally { this.limpiarEvidencia(); }
+      }
       this.idTicket.set(ticket.id_ticket);
       this.vista.set('buscando');
       this.canal = this.supabase.suscribirATicket(ticket.id_ticket, (actualizado) => void this.procesarActualizacion(actualizado), () => this.error.set('Se perdió la conexión en tiempo real. Intenta recargar la página.'));
@@ -291,6 +314,11 @@ export class SolicitudTicketComponent {
   private async cargarOfertas(idTicket: number): Promise<void> {
     try { this.ofertas.set(await this.supabase.obtenerOfertasParaCliente(idTicket)); }
     catch { this.error.set('No pudimos actualizar las ofertas. Intenta recargar la página.'); }
+  }
+
+  private limpiarEvidencia(): void {
+    this.evidencia().forEach(({ url }) => URL.revokeObjectURL(url));
+    this.evidencia.set([]);
   }
 
   /** Solicita la posición precisa del auto; el navegador exige HTTPS y consentimiento. */
