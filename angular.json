@@ -41,11 +41,23 @@
           },
           "defaultConfiguration": "development"
         },
-        "test": { "builder": "@angular/build:karma", "options": { "tsConfig": "tsconfig.spec.json", "assets": [], "styles": ["src/styles.css"] } }
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "mecanikall:build:development",
+            "tsConfig": "tsconfig.spec.json",
+            "runner": "vitest",
+            "providersFile": "src/test.providers.ts",
+            "watch": false
+          }
+        }
       }
     }
   },
   "cli": {
-    "analytics": "fd52056f-ee0c-4640-a225-cf4a3892e566"
+    "analytics": "fd52056f-ee0c-4640-a225-cf4a3892e566",
+    "cache": {
+      "enabled": false
+    }
   }
 }

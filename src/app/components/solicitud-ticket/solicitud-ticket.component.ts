@@ -73,6 +73,24 @@ const MARCAS_VEHICULOS: MarcaVehiculo[] = [
                 <textarea class="mt-2 min-h-28 w-full resize-none rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="descripcion_falla" placeholder="Ej. El coche desboca y rechina al frenar."></textarea>
                 @if (campoInvalido('descripcion_falla')) { <span class="mt-1 block text-xs text-red-300">Describe la falla para encontrar al especialista indicado.</span> }
               </label>
+              <fieldset class="space-y-3 rounded-xl border border-slate-700 bg-slate-900/40 p-4"><legend class="px-1 text-sm font-semibold text-orange-300">Cuéntanos más de la falla</legend>
+                <p class="text-xs leading-5 text-slate-400">Estas respuestas ayudan a que el pre-diagnóstico y el taller reciban información más precisa.</p>
+                <label class="block text-sm font-medium">¿Cuándo ocurre principalmente?
+                  <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="momento_falla"><option value="">Selecciona una opción</option><option value="Al encender o arrancar">Al encender o arrancar</option><option value="Al acelerar">Al acelerar</option><option value="Al frenar">Al frenar</option><option value="Al girar o dar vuelta">Al girar o dar vuelta</option><option value="Al cambiar de velocidad">Al cambiar de velocidad</option><option value="Mientras manejo">Mientras manejo</option><option value="Todo el tiempo">Todo el tiempo</option></select>
+                  @if (campoInvalido('momento_falla')) { <span class="mt-1 block text-xs text-red-300">Indica cuándo sucede.</span> }
+                </label>
+                <label class="block text-sm font-medium">¿Qué señales notas?
+                  <textarea class="mt-2 min-h-24 w-full resize-none rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="senales_observadas" placeholder="Ej. Vibración en el volante, rechinido metálico, olor a quemado, humo, fuga o pérdida de fuerza."></textarea>
+                  @if (campoInvalido('senales_observadas')) { <span class="mt-1 block text-xs text-red-300">Describe al menos una señal que notes.</span> }
+                </label>
+                <label class="block text-sm font-medium">¿Se encendió algún testigo en el tablero?
+                  <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="testigo_tablero"><option value="">Selecciona una opción</option><option value="No">No</option><option value="Sí, check engine">Sí, check engine</option><option value="Sí, aceite">Sí, aceite</option><option value="Sí, temperatura">Sí, temperatura</option><option value="Sí, batería">Sí, batería</option><option value="Sí, frenos o ABS">Sí, frenos o ABS</option><option value="Sí, otro o no estoy seguro">Sí, otro o no estoy seguro</option></select>
+                  @if (campoInvalido('testigo_tablero')) { <span class="mt-1 block text-xs text-red-300">Indica si viste un testigo.</span> }
+                </label>
+                <label class="block text-sm font-medium">¿Qué pasó antes de la falla? <span class="font-normal text-slate-400">(opcional)</span>
+                  <input class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="antecedentes_falla" placeholder="Ej. Pasé un bache, se hizo un servicio o empezó después de cargar gasolina." />
+                </label>
+              </fieldset>
               <fieldset class="space-y-3"><legend class="text-sm font-medium">Vehículo</legend>
                 <label class="block text-sm text-slate-300">Marca
                   <select class="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20" formControlName="marca" (change)="alCambiarMarca()"><option value="">Selecciona una marca</option>@for (marca of marcas; track marca.nombre) { <option [value]="marca.nombre">{{ marca.nombre }}</option> }<option value="__otra__">Otra / no aparece en la lista</option></select>
@@ -129,6 +147,10 @@ export class SolicitudTicketComponent {
     telefono_whatsapp: ['', [Validators.required, Validators.pattern(/^\D*(?:\d\D*){10}$/)]],
     ubicacion_auto: ['', [Validators.required, Validators.minLength(3)]],
     descripcion_falla: ['', [Validators.required, Validators.minLength(10)]],
+    momento_falla: ['', Validators.required],
+    senales_observadas: ['', [Validators.required, Validators.minLength(5)]],
+    testigo_tablero: ['', Validators.required],
+    antecedentes_falla: [''],
     marca: ['', Validators.required],
     marca_otro: [{ value: '', disabled: true }, [Validators.required, Validators.minLength(2)]],
     modelo: [{ value: '', disabled: true }, Validators.required],
@@ -173,6 +195,12 @@ export class SolicitudTicketComponent {
       const marca = valores.marca === '__otra__' ? valores.marca_otro.trim() : valores.marca;
       const modelo = valores.modelo === '__otro__' ? valores.modelo_otro.trim() : valores.modelo;
       const vehiculo = `${marca} ${modelo} ${valores.anio}`;
+      const observacionesDiagnostico = [
+        `La falla ocurre principalmente: ${valores.momento_falla}.`,
+        `Señales observadas: ${valores.senales_observadas}.`,
+        `Testigo en tablero: ${valores.testigo_tablero}.`,
+        valores.antecedentes_falla ? `Antes de la falla: ${valores.antecedentes_falla}.` : '',
+      ].filter(Boolean).join(' ');
       const coordenadas = await this.obtenerUbicacionActual();
       let prediagnostico: DiagnosticoAi | null = null;
       let diagnosticoListo = false;
@@ -183,6 +211,7 @@ export class SolicitudTicketComponent {
           motorTransmision: valores.motor_transmision,
           sintoma: valores.descripcion_falla,
           puedeCircular: valores.puede_circular as 'yes' | 'no',
+          observaciones: observacionesDiagnostico,
         });
         prediagnostico = respuestaIa.diagnostic;
         diagnosticoListo = respuestaIa.readyForDiagnosis;
@@ -195,6 +224,10 @@ export class SolicitudTicketComponent {
         valores.motor_transmision ? `Motor/transmisión: ${valores.motor_transmision}.` : '',
         `Puede circular: ${valores.puede_circular === 'yes' ? 'Sí' : 'No'}.`,
         `Falla reportada: ${valores.descripcion_falla}`,
+        `Cuándo ocurre: ${valores.momento_falla}.`,
+        `Señales observadas: ${valores.senales_observadas}.`,
+        `Testigo en tablero: ${valores.testigo_tablero}.`,
+        valores.antecedentes_falla ? `Antes de la falla: ${valores.antecedentes_falla}.` : '',
         diagnosticoListo && textoDiagnostico ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${textoDiagnostico}` : '',
       ].filter(Boolean).join('\n');
       const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico, ...coordenadas });
