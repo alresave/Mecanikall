@@ -51,6 +51,15 @@ const MARCAS_VEHICULOS: MarcaVehiculo[] = [
           <div role="status" class="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{{ aviso() }}</div>
         }
 
+        @if (vista() === 'formulario' && historial().length) {
+          <section class="mb-5 rounded-2xl border border-slate-700 bg-slate-800 p-4">
+            <p class="text-xs font-bold tracking-[.16em] text-orange-400">TU HISTORIAL</p>
+            <div class="mt-3 space-y-3">@for (ticket of historial(); track ticket.id_ticket) {
+              <article class="rounded-xl bg-slate-900 p-3 text-sm"><div class="flex items-center justify-between gap-3"><p class="font-semibold">Solicitud #{{ ticket.id_ticket }}</p><span class="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-200">{{ ticket.estatus }}</span></div><p class="mt-2 line-clamp-2 text-xs text-slate-400">{{ ticket.descripcion_falla }}</p>@if (ticket.ai_prediagnostico) { <div class="mt-3 border-l-2 border-orange-400 pl-3 text-xs text-slate-300"><p class="font-semibold text-orange-300">Pre-diagnóstico IA · urgencia {{ etiquetaUrgencia(ticket.ai_prediagnostico.urgency) }}</p>@if (ticket.ai_prediagnostico.possibleCauses.length) { <p class="mt-1">Posibles causas: {{ ticket.ai_prediagnostico.possibleCauses.join(', ') }}</p> }@if (ticket.ai_prediagnostico.nextStep) { <p class="mt-1">Siguiente paso: {{ ticket.ai_prediagnostico.nextStep }}</p> }</div> }</article>
+            }</div>
+          </section>
+        }
+
         @if (vista() === 'formulario') {
           <div class="rounded-3xl border border-slate-700/70 bg-slate-800 p-5 shadow-2xl shadow-black/30">
             <p class="text-sm font-medium text-orange-400">REPORTA TU FALLA</p>
@@ -122,7 +131,9 @@ const MARCAS_VEHICULOS: MarcaVehiculo[] = [
         } @else if (vista() === 'enviando') {
           <div class="py-24 text-center"><div class="mx-auto size-14 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500"></div><h1 class="mt-7 text-xl font-bold">Enviando tu solicitud</h1><p class="mt-2 text-sm text-slate-400">Estamos preparando la búsqueda.</p></div>
         } @else if (vista() === 'buscando') {
-          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Compara las ofertas</h1><p class="mt-3 leading-6 text-slate-400">Los talleres cercanos enviarán precio y tiempo estimado.</p>@if (!ofertas().length) { <div class="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Esperando ofertas</div> } @else { <div class="mt-6 space-y-3 text-left">@for (oferta of ofertas(); track oferta.id_oferta) { <article class="rounded-xl border border-slate-600 bg-slate-900 p-4"><div class="flex justify-between gap-3"><div><p class="font-bold">{{ oferta.nombre_taller }}</p><p class="mt-1 text-xs text-slate-400">{{ oferta.especialidades.join(', ') || 'Servicio mecánico' }}</p></div><p class="font-bold text-orange-400">{{ oferta.precio_estimado | currency:'MXN':'symbol-narrow':'1.0-2' }}</p></div><p class="mt-3 text-sm text-slate-300">Llega aprox. en {{ oferta.tiempo_estimado_minutos }} min</p>@if (oferta.mensaje) { <p class="mt-2 text-sm text-slate-400">{{ oferta.mensaje }}</p> }<button type="button" class="mt-4 w-full rounded-lg bg-orange-500 px-3 py-2.5 font-bold text-slate-950 disabled:opacity-50" [disabled]="seleccionandoOferta() === oferta.id_oferta" (click)="aceptarOferta(oferta)">{{ seleccionandoOferta() === oferta.id_oferta ? 'Confirmando…' : 'Elegir esta oferta' }}</button></article> }</div> }<button type="button" class="mt-6 text-sm font-medium text-slate-400 underline hover:text-red-300 disabled:opacity-50" [disabled]="cancelando()" (click)="cancelar()">{{ cancelando() ? 'Cancelando…' : 'Cancelar solicitud' }}</button></div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-800 p-7 text-center"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500/15 text-3xl text-orange-400">⌁</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">SOLICITUD ABIERTA</p><h1 class="mt-3 text-2xl font-bold">Compara las ofertas</h1><p class="mt-3 leading-6 text-slate-400">Los talleres cercanos enviarán precio y tiempo estimado.</p>@if (!ofertas().length) { <div class="mx-auto mt-6 flex w-fit items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs text-slate-300"><span class="size-2 animate-pulse rounded-full bg-orange-500"></span> Esperando ofertas</div> } @else { <div class="mt-6 space-y-3 text-left">@for (oferta of ofertas(); track oferta.id_oferta) { <article class="rounded-xl border border-slate-600 bg-slate-900 p-4"><div class="flex justify-between gap-3"><div><p class="font-bold">{{ oferta.nombre_taller }}</p><p class="mt-1 text-xs text-slate-400">{{ oferta.especialidades.join(', ') || 'Servicio mecánico' }}</p></div><p class="font-bold text-orange-400">{{ oferta.precio_estimado | currency:'MXN':'symbol-narrow':'1.0-2' }}</p></div><p class="mt-3 text-sm text-slate-300">Llega aprox. en {{ oferta.tiempo_estimado_minutos }} min</p>@if (oferta.mensaje) { <p class="mt-2 text-sm text-slate-400">{{ oferta.mensaje }}</p> }<button type="button" class="mt-4 w-full rounded-lg bg-orange-500 px-3 py-2.5 font-bold text-slate-950 disabled:opacity-50" [disabled]="seleccionandoOferta() === oferta.id_oferta" (click)="aceptarOferta(oferta)">{{ seleccionandoOferta() === oferta.id_oferta ? 'Confirmando…' : 'Elegir esta oferta' }}</button></article> }</div> }
+            @if (conversacionIa().length) { <section class="mt-6 rounded-2xl border border-cyan-400/30 bg-slate-950/60 p-4 text-left"><p class="text-xs font-bold tracking-[.15em] text-cyan-300">ASESOR IA · PUEDES SEGUIR PREGUNTANDO</p><div class="mt-3 max-h-72 space-y-3 overflow-y-auto">@for (mensaje of conversacionIa(); track $index) { <p class="whitespace-pre-line rounded-xl px-3 py-2 text-sm" [class]="mensaje.role === 'user' ? 'ml-8 bg-slate-700 text-slate-100' : 'mr-3 bg-cyan-950/50 text-slate-200'">{{ mensaje.content }}</p> }</div><div class="mt-3 flex flex-wrap gap-2"><button type="button" class="rounded-full border border-slate-600 px-3 py-1 text-xs text-slate-300" (click)="usarPreguntaRapida('¿Puedo conducirlo mientras consigo un taller?')">¿Puedo conducir?</button><button type="button" class="rounded-full border border-slate-600 px-3 py-1 text-xs text-slate-300" (click)="usarPreguntaRapida('¿Qué debo revisar o evitar antes de llevarlo al taller?')">Qué evitar</button></div><form class="mt-3 flex gap-2" (ngSubmit)="continuarDiagnostico()"><input class="min-w-0 flex-1 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm" [value]="preguntaIa()" (input)="preguntaIa.set($any($event.target).value)" [disabled]="consultandoIa()" maxlength="1000" placeholder="Agrega un síntoma o pregunta…" /><button class="rounded-xl bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 disabled:opacity-50" [disabled]="consultandoIa() || !preguntaIa().trim()">{{ consultandoIa() ? 'Consultando…' : 'Enviar' }}</button></form></section> }
+            <button type="button" class="mt-6 text-sm font-medium text-slate-400 underline hover:text-red-300 disabled:opacity-50" [disabled]="cancelando()" (click)="cancelar()">{{ cancelando() ? 'Cancelando…' : 'Cancelar solicitud' }}</button></div>
         } @else {
           <div class="rounded-3xl border border-orange-400/30 bg-slate-800 p-7 text-center shadow-xl shadow-orange-950/20"><div class="mx-auto grid size-16 place-items-center rounded-full bg-orange-500 text-3xl text-slate-950">✓</div><p class="mt-6 text-xs font-bold tracking-[.2em] text-orange-400">AYUDA EN CAMINO</p><h1 class="mt-3 text-2xl font-bold">{{ mecanico()?.nombre_taller }}</h1><p class="mt-3 text-sm leading-6 text-slate-400">Aceptó tu solicitud. Escríbele para coordinar la atención.</p><a class="mt-7 block w-full rounded-xl bg-orange-500 px-4 py-3.5 font-bold text-slate-950 transition hover:bg-orange-400" [href]="whatsappUrl()" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div>
         }
@@ -146,6 +157,11 @@ export class SolicitudTicketComponent {
   readonly ofertas = signal<OfertaTicket[]>([]);
   readonly seleccionandoOferta = signal<number | null>(null);
   readonly evidencia = signal<{ archivo: File; nombre: string; url: string; esImagen: boolean }[]>([]);
+  readonly historial = signal<Ticket[]>([]);
+  readonly conversacionIa = signal<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  readonly sesionIa = signal<string | null>(null);
+  readonly preguntaIa = signal('');
+  readonly consultandoIa = signal(false);
   readonly marcas = MARCAS_VEHICULOS;
   readonly anios = Array.from({ length: 50 }, (_, indice) => String(new Date().getFullYear() - indice));
   readonly formulario = this.fb.nonNullable.group({
@@ -166,7 +182,7 @@ export class SolicitudTicketComponent {
     puede_circular: ['', Validators.required],
   });
 
-  constructor() { this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); this.limpiarEvidencia(); }); }
+  constructor() { void this.cargarHistorial(); this.destroyRef.onDestroy(() => { void this.supabase.cancelarSuscripcion(this.canal); void this.supabase.cancelarSuscripcion(this.canalOfertas); this.limpiarEvidencia(); }); }
 
   campoInvalido(nombre: keyof typeof this.formulario.controls): boolean {
     const control = this.formulario.controls[nombre];
@@ -234,6 +250,8 @@ export class SolicitudTicketComponent {
         prediagnostico = respuestaIa.diagnostic;
         diagnosticoListo = respuestaIa.readyForDiagnosis;
         textoDiagnostico = respuestaIa.reply;
+        this.sesionIa.set(respuestaIa.sessionId);
+        this.conversacionIa.set(respuestaIa.mensajes ?? []);
       } catch {
         this.aviso.set('No pudimos generar el pre-diagnóstico, pero tu solicitud fue enviada a los talleres cercanos.');
       }
@@ -249,6 +267,7 @@ export class SolicitudTicketComponent {
         diagnosticoListo && textoDiagnostico ? `\n\nPRE-DIAGNÓSTICO MECANIKALL AI\n${textoDiagnostico}` : '',
       ].filter(Boolean).join('\n');
       const ticket = await this.supabase.solicitarAyuda({ ...valores, descripcion_falla: descripcionDetallada, prediagnostico, ...coordenadas });
+      this.historial.update((tickets) => [ticket, ...tickets.filter((actual) => actual.id_ticket !== ticket.id_ticket)]);
       if (this.evidencia().length) {
         try { await this.supabase.subirEvidenciaTicket(ticket.id_ticket, this.evidencia().map(({ archivo }) => archivo)); }
         catch { this.aviso.set('La solicitud fue enviada, pero no pudimos adjuntar algunos archivos.'); }
@@ -268,6 +287,28 @@ export class SolicitudTicketComponent {
   whatsappUrl(): string {
     const telefono = this.mecanico()?.whatsapp_destino.replace(/\D/g, '') ?? '';
     return `https://wa.me/${telefono}?text=${encodeURIComponent('Hola, vi que aceptaste mi solicitud en Mecanikall.')}`;
+  }
+
+  etiquetaUrgencia(urgencia: DiagnosticoAi['urgency']): string {
+    return urgencia === 'high' ? 'alta' : urgencia === 'medium' ? 'media' : urgencia === 'low' ? 'baja' : 'sin clasificar';
+  }
+
+  usarPreguntaRapida(pregunta: string): void { this.preguntaIa.set(pregunta); }
+
+  async continuarDiagnostico(): Promise<void> {
+    const pregunta = this.preguntaIa().trim();
+    const sesion = this.sesionIa();
+    if (!pregunta || !sesion || this.consultandoIa()) return;
+    const mensajes = [...this.conversacionIa(), { role: 'user' as const, content: pregunta }];
+    this.conversacionIa.set(mensajes);
+    this.preguntaIa.set('');
+    this.consultandoIa.set(true);
+    try {
+      const respuesta = await this.supabase.continuarDiagnostico(sesion, mensajes);
+      this.conversacionIa.update((actual) => [...actual, { role: 'assistant', content: respuesta.reply }]);
+    } catch {
+      this.conversacionIa.update((actual) => [...actual, { role: 'assistant', content: 'No pude responder ahora. El taller podrá confirmar el diagnóstico al revisarlo físicamente.' }]);
+    } finally { this.consultandoIa.set(false); }
   }
 
   async cancelar(): Promise<void> {
@@ -316,8 +357,13 @@ export class SolicitudTicketComponent {
     catch { this.error.set('No pudimos actualizar las ofertas. Intenta recargar la página.'); }
   }
 
+  private async cargarHistorial(): Promise<void> {
+    try { this.historial.set(await this.supabase.obtenerMisTickets()); }
+    catch { /* El historial es complementario; el formulario sigue disponible sin conexión. */ }
+  }
+
   private limpiarEvidencia(): void {
-    this.evidencia().forEach(({ url }) => URL.revokeObjectURL(url));
+    this.evidencia().forEach(({ url }) => URL.revokeObjectURL?.(url));
     this.evidencia.set([]);
   }
 

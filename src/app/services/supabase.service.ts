@@ -19,10 +19,17 @@ import {
   DiagnosticoAi,
 } from '../models';
 
+interface MensajeDiagnosticoAi {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface RespuestaDiagnosticoAi {
+  sessionId: string;
   reply: string;
   readyForDiagnosis: boolean;
   diagnostic: DiagnosticoAi;
+  mensajes?: MensajeDiagnosticoAi[];
 }
 
 /** Acceso centralizado a la API y a eventos en tiempo real de Supabase. */
@@ -82,8 +89,19 @@ export class SupabaseService {
       `¿Puede circular?: ${detalle.puedeCircular === 'yes' ? 'Sí' : 'No'}.`,
       detalle.observaciones?.trim() ? `Observaciones adicionales: ${detalle.observaciones.trim()}.` : '',
     ].filter(Boolean).join(' ');
+    const data = await this.consultarDiagnostico(crypto.randomUUID(), [{ role: 'user', content: mensaje }]);
+    return { ...data, mensajes: [{ role: 'user', content: mensaje } as MensajeDiagnosticoAi, { role: 'assistant', content: data.reply } as MensajeDiagnosticoAi] };
+  }
+
+  /** Continúa una conversación de diagnóstico conservando el contexto que el usuario ya aportó. */
+  async continuarDiagnostico(sessionId: string, mensajes: MensajeDiagnosticoAi[]): Promise<RespuestaDiagnosticoAi> {
+    return this.consultarDiagnostico(sessionId, mensajes);
+  }
+
+  private async consultarDiagnostico(sessionId: string, messages: MensajeDiagnosticoAi[]): Promise<RespuestaDiagnosticoAi> {
+    await this.asegurarSesion();
     const { data, error } = await this.client.functions.invoke<RespuestaDiagnosticoAi>('mecanikall-ai', {
-      body: { sessionId: crypto.randomUUID(), messages: [{ role: 'user', content: mensaje }] },
+      body: { sessionId, messages },
     });
     if (error || !data) throw error ?? new Error('No fue posible generar el pre-diagnóstico.');
     return data;
@@ -284,6 +302,39 @@ export class SupabaseService {
       if (rutas.length) await this.client.storage.from('ticket-evidencia').remove(rutas);
       throw error;
     }
+  }
+
+  /** El taller asignado puede compartir fotos del diagnóstico o la cotización con el cliente. */
+  async subirEvidenciaDiagnostico(idTicket: number, archivos: File[]): Promise<void> {
+    if (!archivos.length) return;
+    const usuario = await this.obtenerUsuarioActual();
+    if (!usuario) throw new Error('No pudimos validar tu sesión para subir las fotos.');
+    const rutas: string[] = [];
+    try {
+      for (const archivo of archivos) {
+        const extension = archivo.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const ruta = `taller/${usuario.id}/${idTicket}/${crypto.randomUUID()}.${extension}`;
+        const { error } = await this.client.storage.from('ticket-evidencia').upload(ruta, archivo, { contentType: archivo.type, upsert: false });
+        if (error) throw error;
+        rutas.push(ruta);
+      }
+      const { error } = await this.client.from('ticket_adjuntos').insert(rutas.map((storage_path, index) => ({ id_ticket: idTicket, storage_path, media_type: archivos[index].type, origen: 'Taller' })));
+      if (error) throw error;
+    } catch (error) {
+      if (rutas.length) await this.client.storage.from('ticket-evidencia').remove(rutas);
+      throw error;
+    }
+  }
+
+  /** Historial privado del solicitante, incluido el pre-diagnóstico generado para cada ticket. */
+  async obtenerMisTickets(): Promise<Ticket[]> {
+    await this.asegurarSesion();
+    const { data, error } = await this.client
+      .from('tickets')
+      .select('id_ticket, id_cliente, descripcion_falla, ubicacion_auto, estatus, id_mecanico_asignado, created_at, updated_at, ai_prediagnostico, ai_urgencia')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as Ticket[];
   }
 
   async obtenerEvidenciaTickets(idsTicket: number[]): Promise<EvidenciaTicket[]> {

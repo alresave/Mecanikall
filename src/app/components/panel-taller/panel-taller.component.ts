@@ -57,7 +57,7 @@ interface BorradorOferta { precio: number | null; minutos: number | null; mensaj
         <div class="mt-10"><p class="text-xs font-bold tracking-[.2em] text-orange-400">SERVICIOS ASIGNADOS</p><h2 class="mt-2 text-xl font-bold">En atención</h2>
           @if (!asignados().length) { <p class="mt-4 text-sm text-slate-400">No tienes servicios asignados.</p> }
           @else { <div class="mt-4 grid gap-4 md:grid-cols-2">@for (ticket of asignados(); track ticket.id_ticket) {
-            <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.ubicacion_auto }}</p></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400">Asignado</span></div><p class="mt-4 text-sm leading-6 text-slate-300">{{ ticket.descripcion_falla }}</p>@if (evidenciaTicket(ticket.id_ticket).length) { <div class="mt-4 grid grid-cols-2 gap-2">@for (archivo of evidenciaTicket(ticket.id_ticket); track archivo.id_adjunto) { @if (archivo.media_type.startsWith('image/')) { <a [href]="archivo.url" target="_blank" rel="noopener noreferrer"><img class="h-24 w-full rounded object-cover" [src]="archivo.url" alt="Foto adjunta del vehículo" /></a> } @else { <audio class="w-full" controls [src]="archivo.url"></audio> } }</div> }<a class="mt-4 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a><button type="button" class="mt-4 w-full rounded-xl border border-emerald-400/50 px-4 py-3 font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" [disabled]="concluyendo() === ticket.id_ticket" (click)="concluir(ticket)">{{ concluyendo() === ticket.id_ticket ? 'Concluyendo…' : 'Marcar como concluido' }}</button></article>
+            <article class="rounded-2xl border border-slate-700 bg-slate-800 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-sm font-bold">{{ ticket.cliente?.nombre_completo ?? 'Cliente' }}</p><p class="mt-1 text-xs text-slate-400">{{ ticket.ubicacion_auto }}</p></div><span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-400">Asignado</span></div><p class="mt-4 text-sm leading-6 text-slate-300">{{ ticket.descripcion_falla }}</p>@if (evidenciaTicket(ticket.id_ticket).length) { <div class="mt-4 grid grid-cols-2 gap-2">@for (archivo of evidenciaTicket(ticket.id_ticket); track archivo.id_adjunto) { @if (archivo.media_type.startsWith('image/')) { <a [href]="archivo.url" target="_blank" rel="noopener noreferrer"><img class="h-24 w-full rounded object-cover" [src]="archivo.url" alt="Evidencia del servicio" /></a> } @else { <audio class="w-full" controls [src]="archivo.url"></audio> } }</div> }<label class="mt-4 block cursor-pointer rounded-xl border border-cyan-400/50 px-4 py-3 text-center text-sm font-bold text-cyan-200 hover:bg-cyan-500/10"><input class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="adjuntarDiagnostico(ticket, $event)" [disabled]="subiendoDiagnostico() === ticket.id_ticket" />{{ subiendoDiagnostico() === ticket.id_ticket ? 'Adjuntando fotos…' : 'Adjuntar fotos de diagnóstico o cotización' }}</label><a class="mt-4 inline-block text-sm text-orange-400 hover:text-orange-300" [href]="whatsappCliente(ticket)" target="_blank" rel="noopener noreferrer">Contactar por WhatsApp</a><button type="button" class="mt-4 w-full rounded-xl border border-emerald-400/50 px-4 py-3 font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50" [disabled]="concluyendo() === ticket.id_ticket" (click)="concluir(ticket)">{{ concluyendo() === ticket.id_ticket ? 'Concluyendo…' : 'Marcar como concluido' }}</button></article>
           }</div> }
         </div>
       </section>
@@ -91,6 +91,7 @@ export class PanelTallerComponent {
   readonly ofertasRefacciones = signal<OfertaRefaccionesTaller[]>([]);
   readonly historialRefacciones = signal<HistorialRefaccionesTaller[]>([]);
   readonly evidenciaPorTicket = signal<Record<number, EvidenciaTicket[]>>({});
+  readonly subiendoDiagnostico = signal<number | null>(null);
 
   constructor() {
     void this.inicializar();
@@ -137,6 +138,25 @@ export class PanelTallerComponent {
     try { await this.supabase.concluirTicket(ticket.id_ticket); await this.cargarTickets(); }
     catch { this.error.set('No fue posible concluir el servicio.'); }
     finally { this.concluyendo.set(null); }
+  }
+
+  async adjuntarDiagnostico(ticket: TicketConCliente, evento: Event): Promise<void> {
+    const input = evento.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    input.value = '';
+    if (!archivos.length) return;
+    if (archivos.length > 3 || archivos.some((archivo) => !['image/jpeg', 'image/png', 'image/webp'].includes(archivo.type) || archivo.size > 8 * 1024 * 1024)) {
+      this.error.set('Adjunta hasta 3 fotos JPG, PNG o WebP de máximo 8 MB cada una.');
+      return;
+    }
+    this.subiendoDiagnostico.set(ticket.id_ticket);
+    try {
+      await this.supabase.subirEvidenciaDiagnostico(ticket.id_ticket, archivos);
+      await this.cargarTickets();
+      this.error.set(null);
+    } catch (error) {
+      this.error.set(error instanceof Error && error.message ? error.message : 'No pudimos adjuntar las fotos del diagnóstico.');
+    } finally { this.subiendoDiagnostico.set(null); }
   }
 
   /** Actualiza el punto PostGIS del taller y recarga los servicios dentro de 5 km. */

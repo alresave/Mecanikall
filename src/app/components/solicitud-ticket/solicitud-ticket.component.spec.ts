@@ -16,6 +16,7 @@ describe('SolicitudTicketComponent', () => {
     service = {
       aceptarOferta: vi.fn().mockResolvedValue(ticketAsignado),
       cancelarSuscripcion: vi.fn().mockResolvedValue(undefined),
+      continuarDiagnostico: vi.fn().mockResolvedValue({ sessionId: 'sesion-ia-123', reply: 'No lo conduzcas hasta revisarlo.', readyForDiagnosis: true, diagnostic: { urgency: 'high', possibleCauses: ['Frenos'], estimatedCostMxn: '$2,000', nextStep: 'Solicita grúa' } }),
       generarPrediagnostico: vi.fn().mockResolvedValue({
         readyForDiagnosis: true,
         reply: 'Prediagnóstico listo.',
@@ -24,6 +25,7 @@ describe('SolicitudTicketComponent', () => {
       obtenerOfertasParaCliente: vi.fn().mockResolvedValue([]),
       obtenerTicket: vi.fn().mockResolvedValue({ ...ticketAsignado, mecanico: { nombre_taller: 'Taller Norte', whatsapp_destino: '5512345678' } }),
       solicitarAyuda: vi.fn().mockResolvedValue(ticketAbierto),
+      subirEvidenciaTicket: vi.fn().mockResolvedValue(undefined),
       suscribirAOfertas: vi.fn().mockReturnValue({} as RealtimeChannel),
       suscribirATicket: vi.fn().mockReturnValue({} as RealtimeChannel),
     };
@@ -72,6 +74,58 @@ describe('SolicitudTicketComponent', () => {
     expect(component.mecanico()?.nombre_taller).toBe('Taller Norte');
     expect(component.whatsappUrl()).toContain('5512345678');
   });
+
+  it('permanece en el formulario y no llama a IA si se deniega la ubicación', async () => {
+    establecerUbicacionDenegada();
+    completarFormulario(component);
+
+    await component.enviar();
+
+    expect(service['generarPrediagnostico']).not.toHaveBeenCalled();
+    expect(service['solicitarAyuda']).not.toHaveBeenCalled();
+    expect(component.vista()).toBe('formulario');
+    expect(component.error()).toContain('ubicación');
+  });
+
+  it('envía la solicitud aunque falle el pre-diagnóstico de IA', async () => {
+    establecerUbicacionExitosa();
+    completarFormulario(component);
+    service['generarPrediagnostico'].mockRejectedValueOnce(new Error('IA no disponible'));
+
+    await component.enviar();
+
+    expect(service['solicitarAyuda']).toHaveBeenCalledWith(expect.objectContaining({ prediagnostico: null }));
+    expect(component.vista()).toBe('buscando');
+    expect(component.aviso()).toContain('pre-diagnóstico');
+  });
+
+  it('conserva la solicitud si falla la carga de adjuntos', async () => {
+    establecerUbicacionExitosa();
+    completarFormulario(component);
+    service['subirEvidenciaTicket'].mockRejectedValueOnce(new Error('storage no disponible'));
+    const archivo = new File(['foto'], 'tablero.jpg', { type: 'image/jpeg' });
+    component.evidencia.set([{ archivo, nombre: archivo.name, url: 'blob:foto', esImagen: true }]);
+
+    await component.enviar();
+
+    expect(service['subirEvidenciaTicket']).toHaveBeenCalledWith(31, [archivo]);
+    expect(component.vista()).toBe('buscando');
+    expect(component.aviso()).toContain('adjuntar');
+  });
+
+  it('continúa el diagnóstico con el contexto y la nueva pregunta del cliente', async () => {
+    component.sesionIa.set('sesion-ia-123');
+    component.conversacionIa.set([{ role: 'assistant', content: '¿Puedes describir el ruido?' }]);
+    component.preguntaIa.set('También se enciende el testigo de frenos.');
+
+    await component.continuarDiagnostico();
+
+    expect(service['continuarDiagnostico']).toHaveBeenCalledWith('sesion-ia-123', [
+      { role: 'assistant', content: '¿Puedes describir el ruido?' },
+      { role: 'user', content: 'También se enciende el testigo de frenos.' },
+    ]);
+    expect(component.conversacionIa().at(-1)?.content).toContain('No lo conduzcas');
+  });
 });
 
 function completarFormulario(component: SolicitudTicketComponent): void {
@@ -94,5 +148,12 @@ function establecerUbicacionExitosa(): void {
   Object.defineProperty(navigator, 'geolocation', {
     configurable: true,
     value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 19.4326, longitude: -99.1332 } } as GeolocationPosition) },
+  });
+}
+
+function establecerUbicacionDenegada(): void {
+  Object.defineProperty(navigator, 'geolocation', {
+    configurable: true,
+    value: { getCurrentPosition: (_success: PositionCallback, error: PositionErrorCallback) => error({ code: 1, message: 'Permission denied' } as GeolocationPositionError) },
   });
 }
