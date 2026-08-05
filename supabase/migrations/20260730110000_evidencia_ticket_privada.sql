@@ -14,27 +14,32 @@ create table if not exists public.ticket_adjuntos (
 create index if not exists ticket_adjuntos_ticket_idx on public.ticket_adjuntos (id_ticket);
 alter table public.ticket_adjuntos enable row level security;
 
+drop policy if exists "Solicitante o taller ve evidencia del ticket" on public.ticket_adjuntos;
 create policy "Solicitante o taller ve evidencia del ticket" on public.ticket_adjuntos for select to authenticated using (
   exists (
     select 1 from public.tickets t left join public.mecanicos m on m.id_mecanico = t.id_mecanico_asignado
     where t.id_ticket = ticket_adjuntos.id_ticket and (t.id_usuario_solicitante = auth.uid() or m.id_usuario = auth.uid())
   )
 );
+drop policy if exists "Solicitante adjunta evidencia propia" on public.ticket_adjuntos;
 create policy "Solicitante adjunta evidencia propia" on public.ticket_adjuntos for insert to authenticated with check (
   (storage.foldername(storage_path))[1] = auth.uid()::text
   and (storage.foldername(storage_path))[2] = id_ticket::text
   and exists (select 1 from public.tickets t where t.id_ticket = ticket_adjuntos.id_ticket and t.id_usuario_solicitante = auth.uid())
 );
 
+drop policy if exists "Solicitante sube su evidencia" on storage.objects;
 create policy "Solicitante sube su evidencia" on storage.objects for insert to authenticated with check (
   bucket_id = 'ticket-evidencia' and (storage.foldername(name))[1] = auth.uid()::text
 );
+drop policy if exists "Solicitante o taller descarga evidencia" on storage.objects;
 create policy "Solicitante o taller descarga evidencia" on storage.objects for select to authenticated using (
   bucket_id = 'ticket-evidencia' and exists (
     select 1 from public.ticket_adjuntos a join public.tickets t on t.id_ticket = a.id_ticket left join public.mecanicos m on m.id_mecanico = t.id_mecanico_asignado
     where a.storage_path = name and (t.id_usuario_solicitante = auth.uid() or m.id_usuario = auth.uid())
   )
 );
+drop policy if exists "Solicitante elimina su evidencia" on storage.objects;
 create policy "Solicitante elimina su evidencia" on storage.objects for delete to authenticated using (
   bucket_id = 'ticket-evidencia' and (storage.foldername(name))[1] = auth.uid()::text
 );
