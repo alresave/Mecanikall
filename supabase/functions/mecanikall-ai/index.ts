@@ -46,7 +46,12 @@ const MAX_MESSAGES = 30;
 const MAX_MESSAGE_LENGTH = 2_000;
 const MAX_BODY_BYTES = 64_000;
 const DISCLAIMER = 'Este es un pre-diagnóstico basado en IA. Requiere inspección física con escáner por un técnico certificado.';
-const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' };
 
 function systemPrompt(): string {
   // Environment storage makes the prompt available after Supabase bundles the function.
@@ -198,6 +203,7 @@ async function askAnthropic(prompt: string, messages: ChatMessage[]): Promise<Ai
 }
 
 Deno.serve(async (request) => {
+  if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return errorResponse('Método no permitido.', 405);
   if (!await authorized(request)) return errorResponse('No autorizado.', 401);
   if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return errorResponse('Solicitud demasiado grande.', 413);
