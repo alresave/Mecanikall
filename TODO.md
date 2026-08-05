@@ -3,6 +3,7 @@
 ## Validación de producción
 
 - [ ] Desplegar el commit más reciente en Vercel.
+- [ ] Restablecer la cuota de la cuenta asociada a `OPENAI_API_KEY` en Supabase; el pre-diagnóstico devuelve 502 por cuota agotada.
 - [ ] Crear un ticket desde un teléfono con respuestas detalladas, una foto y un audio.
 - [ ] Confirmar que el taller asignado puede ver la foto y reproducir el audio.
 - [ ] Confirmar que un usuario o taller no relacionado no puede abrir los adjuntos.

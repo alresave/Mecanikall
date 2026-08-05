@@ -64,6 +64,15 @@ function errorResponse(message: string, status = 400): Response {
   return Response.json({ error: message }, { status, headers: jsonHeaders });
 }
 
+function diagnosticErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (message.includes('Falta OPENAI_API_KEY')) return 'La configuración de OpenAI está incompleta.';
+  if (message.includes('OpenAI respondió 401')) return 'La clave de OpenAI no es válida o expiró.';
+  if (message.includes('OpenAI respondió 429')) return 'La cuenta de OpenAI no tiene cuota disponible. Intenta más tarde.';
+  if (message.includes('OpenAI respondió 400') || message.includes('OpenAI respondió 404')) return 'El modelo de OpenAI configurado no está disponible.';
+  return 'No fue posible generar el pre-diagnóstico. Intenta de nuevo en unos minutos.';
+}
+
 /** Accepts either the WhatsApp webhook secret or an authenticated Supabase user.
  * The latter is used by the web ticket form; keeping this verification here avoids
  * ever exposing the webhook secret to a browser.
@@ -225,6 +234,6 @@ Deno.serve(async (request) => {
     return Response.json({ sessionId: input.sessionId, ...result, ticket: ticket ? { id: ticket.id_ticket, created: true } : { id: null, created: false } }, { headers: jsonHeaders });
   } catch (error) {
     console.error('mecanikall-ai error:', error instanceof Error ? error.message : 'Unknown error');
-    return errorResponse('No fue posible generar el pre-diagnóstico. Intenta de nuevo en unos minutos.', 502);
+    return errorResponse(diagnosticErrorMessage(error), 502);
   }
 });
