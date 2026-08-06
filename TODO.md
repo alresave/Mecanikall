@@ -3,6 +3,7 @@
 ## Validación de producción
 
 - [ ] Desplegar el commit más reciente en Vercel.
+- [ ] Configurar en Supabase `GOOGLE_AI_API_KEY` (o `GEMINI_API_KEY`) y, opcionalmente, `GOOGLE_AI_MODEL`; el pre-diagnóstico usa Gemini (`gemini-2.5-flash` por defecto).
 - [ ] Crear un ticket desde un teléfono con respuestas detalladas, una foto y un audio.
 - [ ] Confirmar que el taller asignado puede ver la foto y reproducir el audio.
 - [ ] Confirmar que un usuario o taller no relacionado no puede abrir los adjuntos.
