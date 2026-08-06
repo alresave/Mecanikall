@@ -101,6 +101,12 @@ function diagnosticErrorMessage(error: unknown): string {
   if (message.includes("Falta GOOGLE_AI_API_KEY")) {
     return "La configuración de Google AI está incompleta.";
   }
+  if (message.includes("Google AI rechazó la clave API")) {
+    return "La clave de Google AI no es válida.";
+  }
+  if (message.includes("Google AI rechazó los permisos")) {
+    return "La clave de Google AI no tiene permisos para usar Gemini.";
+  }
   if (
     message.includes("Google AI respondió 401") ||
     message.includes("Google AI respondió 403")
@@ -268,13 +274,21 @@ async function askGoogleAi(
         })),
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 1_200,
-          responseMimeType: "application/json",
+          response_mime_type: "application/json",
         },
       }),
     },
   );
-  if (!response.ok) throw new Error(`Google AI respondió ${response.status}.`);
+  if (!response.ok) {
+    const detail = await response.text();
+    if (/API_KEY_INVALID|API key not valid/i.test(detail)) {
+      throw new Error("Google AI rechazó la clave API.");
+    }
+    if (/PERMISSION_DENIED|permission denied/i.test(detail)) {
+      throw new Error("Google AI rechazó los permisos de la clave API.");
+    }
+    throw new Error(`Google AI respondió ${response.status}.`);
+  }
   const body = await response.json();
   return parseResponse(
     body.candidates?.[0]?.content?.parts?.map((part: { text?: string }) =>
