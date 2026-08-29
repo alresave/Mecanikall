@@ -20,5 +20,5 @@
 
 - [x] Permitir que el taller adjunte fotos del diagnóstico o de la cotización al cliente.
 - [x] Mostrar al cliente el pre-diagnóstico IA y el estado de su solicitud en un historial.
-- [ ] Medir conversión: solicitud → oferta → aceptación → servicio concluido → suscripción.
+- [x] Medir conversión: solicitud → oferta → aceptación → servicio concluido → suscripción.
 - [ ] Ajustar las preguntas del ticket según la retroalimentación de talleres.

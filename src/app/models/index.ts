@@ -101,5 +101,6 @@ export interface EntidadOperativa { tipo: 'Taller' | 'Tienda'; id_entidad: numbe
 export interface SeguimientoComercial { tipo_entidad: 'Taller' | 'Tienda de refacciones'; id_entidad:number; estado:string; proxima_accion:string|null; notas:string; asignado_a_mi:boolean; id_responsable:string|null; responsable_email:string|null; }
 export interface Vendedor { id_usuario:string; email:string; }
 export interface ComisionVendedor { id_comision:number; nombre_taller:string; vendedor_email:string; importe_pago:number; importe_comision:number|null; estatus:'Pendiente'|'Pagada'; created_at:string; pagada_at:string|null; }
+export interface ReporteConversion { solicitudes:number; solicitudes_con_oferta:number; ofertas_aceptadas:number; servicios_concluidos:number; suscripciones_activas:number; }
 export interface HistorialRefaccionesTaller { id_solicitud:number;id_ticket:number;descripcion:string;estatus:string;nombre_tienda:string|null;accepted_at:string|null;created_at:string; }
 export interface HistorialRefaccionesTienda { id_oferta:number;id_solicitud:number;descripcion:string;estatus_oferta:string;estatus_solicitud:string;precio_estimado:number;tiempo_estimado_minutos:number;nombre_taller:string;created_at:string; }

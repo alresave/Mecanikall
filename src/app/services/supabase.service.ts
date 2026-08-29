@@ -16,7 +16,7 @@ import {
   SeguimientoComercial,
   HistorialRefaccionesTaller, HistorialRefaccionesTienda, Vendedor, ComisionVendedor,
   TicketStatus, EvidenciaTicket,
-  DiagnosticoAi,
+  DiagnosticoAi, ReporteConversion,
 } from '../models';
 
 interface MensajeDiagnosticoAi {
@@ -231,6 +231,7 @@ export class SupabaseService {
   async obtenerVendedores():Promise<Vendedor[]>{const{data,error}=await this.client.rpc('vendedores_disponibles');if(error)throw error;return(data??[])as Vendedor[];}
   async asignarVendedorATaller(idTaller:number,idVendedor:string):Promise<void>{const{error}=await this.client.rpc('asignar_vendedor_a_taller',{p_id_taller:idTaller,p_id_vendedor:idVendedor});if(error)throw error;}
   async obtenerComisionesVendedores():Promise<ComisionVendedor[]>{const{data,error}=await this.client.rpc('comisiones_vendedores_actuales');if(error)throw error;return(data??[])as ComisionVendedor[];}
+  async obtenerReporteConversion(mes:string):Promise<ReporteConversion>{const{data,error}=await this.client.rpc('reporte_conversion_mensual',{p_mes:`${mes}-01`}).single<ReporteConversion>();if(error||!data)throw error??new Error('No fue posible obtener el reporte de conversión.');return data;}
   async marcarComisionPagada(idComision:number,importeComision:number):Promise<void>{const{error}=await this.client.rpc('marcar_comision_pagada',{p_id_comision:idComision,p_importe_comision:importeComision});if(error)throw error;}
   async iniciarCheckoutSuscripcion():Promise<string>{const{data,error}=await this.client.functions.invoke<{url:string}>('stripe-checkout');if(error||!data?.url)throw error??new Error('No fue posible iniciar el pago.');return data.url;}
 
